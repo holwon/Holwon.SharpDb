@@ -26,15 +26,15 @@ A hand-off-ready spec for **SharpDb v1**: a C# stdio MCP server built on the off
 - [Schema introspection SQL for MySQL and SQLite](issues/01-research-schema-introspection-sql.md): MySQL via `INFORMATION_SCHEMA` (`TABLES`/`COLUMNS`/`KEY_COLUMN_USAGE`/`STATISTICS`); SQLite via `sqlite_schema` + table-scoped PRAGMAs (`table_info`, `foreign_key_list`, `index_list`/`index_info`), using the parameterisable `pragma_*` table-valued form. Comments/charsets/collations are MySQL-only; SQLite auto-increment must be inferred.
 - [Read-only SQL enforcement options in .NET](issues/02-research-sql-readonly-validation.md): three layers — `SqlParserCS` AST guard (single statement, `Select`/`Explain`/`Show`/read-only `Pragma`), then engine-level read-only (MySQL `SET SESSION TRANSACTION READ ONLY`, SQLite `Mode=ReadOnly`), then least-privilege credentials. Plain keyword heuristics rejected.
 - [MCP SDK: packaging, logging, testing and config binding](issues/03-research-mcp-sdk-packaging.md): `PackAsTool` + `ToolCommandName` on `net8.0`; all logging to stderr via `LogToStandardErrorThreshold`; read-only tools must explicitly declare `ReadOnly/Destructive/Idempotent/OpenWorld`; `UseStructuredContent` + `OutputSchemaType` yields both text and structured content; tests via `McpServerTool.Create` or an in-process `McpClient` over pipes; `SHARPDB__X` binds to options via the `__` separator.
+- [Prototype: tool output shapes](issues/04-prototype-tool-output-shapes.md): `execute_query` uses `{columns, rows}` envelope (~40–46% fewer tokens than array-of-objects); `list_tables` and `describe_table` use structured JSON objects; errors use `{error: string}`. `UseStructuredContent` is orthogonal to shape choice. Type representation: native JSON for int/bool/decimal/null, ISO 8601 for datetime, base64 for blob.
 
 ## Not yet specified
 
 Fog — in scope, but not yet sharp enough to ticket. Graduates as the frontier advances.
 
 - **MCP resources vs prompts**: whether schema is *also* exposed as MCP resources (e.g. `sharpdb://tables`) alongside tools, or tools only.
-- **Large-result handling**: pagination / streaming / truncation strategy when a query returns many rows.
+- **Large-result handling**: pagination / streaming / truncation strategy when a query returns many rows. Format B's token savings help but are not a substitute for a size cap.
 - **Connection lifetime & pooling**: per-call connection open/close vs a pooled holder; interaction with the long-running stdio process.
-- **Error surface**: how DB errors, validation rejections and timeouts are shaped into tool results without leaking connection secrets.
 - **Logging**: what is logged to stderr, at which levels, and whether SQL text is logged.
 
 ## Out of scope
