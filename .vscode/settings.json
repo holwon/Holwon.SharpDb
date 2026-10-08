@@ -1,10 +1,10 @@
 {
     "xmart.agentModels": {
         "vm-global": {
-            "vendor": "xmart-codearts",
-            "id": "01a079e7119478518556154bceeff546:deepseek-v4.1-flash",
-            "name": "deepseek-v4.1-flash",
-            "updatedAt": "2026-10-08T03:10:52.739Z"
+            "vendor": "xmart-qoder",
+            "id": "f33a0bb8c4e9:dfmodel",
+            "name": "DeepSeek-Flash (x0.1)",
+            "updatedAt": "2026-10-08T06:40:38.383Z"
         }
     }
 }
