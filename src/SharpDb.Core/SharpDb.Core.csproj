@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The database-agnostic server body: the read-only Guard, query execution and
+    the four Tools (ADR 0002). Dapper runs queries, SqlParserCS parses SQL for
+    the Guard (ADR 0005), and ModelContextProtocol defines the Tool surface
+    (ADR 0010). It references no Driver and no Provider (ADR 0004).
+  -->
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.89" />
+    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageReference Include="SqlParserCS" Version="0.6.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpDb.Abstractions\SharpDb.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

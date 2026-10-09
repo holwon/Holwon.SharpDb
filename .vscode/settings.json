@@ -1,0 +1,6 @@
+{
+  // The repository builds from the .slnx at the root. Pointing the C# extension
+  // at it makes `dotnet build` / `dotnet test` resolve the same nine projects
+  // the command line and CI do.
+  "dotnet.defaultSolution": "SharpDb.slnx"
+}

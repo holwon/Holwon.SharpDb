@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Host: the assembly layer that turns Core and the Providers into a running
+    executable (ADR 0004). It references every Provider precisely so that Core
+    does not have to; selecting one by database type is a runtime decision made
+    here. Packaging metadata (PackageId, ToolCommandName, PackAsTool) arrives
+    with the distribution work, not with the skeleton.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpDb.Core\SharpDb.Core.csproj" />
+    <ProjectReference Include="..\SharpDb.Provider.MySql\SharpDb.Provider.MySql.csproj" />
+    <ProjectReference Include="..\SharpDb.Provider.Sqlite\SharpDb.Provider.Sqlite.csproj" />
+  </ItemGroup>
+
+</Project>

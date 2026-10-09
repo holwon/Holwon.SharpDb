@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Provider contract and the Schema model only (ADR 0003). It references no
+    Driver and no SQL parser: both the Guard and the Drivers live elsewhere, and
+    keeping them out is what lets a new database type be added without touching
+    Core (ADR 0004).
+  -->
+
+</Project>

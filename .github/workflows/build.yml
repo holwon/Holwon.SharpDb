@@ -1,0 +1,33 @@
+name: Build and test
+
+# The build/test job. It is separate from the docs check so a documentation
+# slip and a broken build stay distinguishable in the checks list.
+#
+# The solution is the XML `.slnx`; resolving it from the CLI needs SDK 9.0.200
+# or newer, which is why the job pins 9.0.x rather than whatever the runner
+# happens to ship with.
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.200
+
+      - name: Build
+        run: dotnet build SharpDb.slnx
+
+      - name: Test
+        run: dotnet test SharpDb.slnx

@@ -1,0 +1,21 @@
+<Solution>
+
+  <!--
+    The five production projects. src/SharpDb is the host executable; it is the
+    only project that references the Providers (ADR 0004).
+  -->
+  <Project Path="src/SharpDb.Abstractions/SharpDb.Abstractions.csproj" />
+  <Project Path="src/SharpDb.Core/SharpDb.Core.csproj" />
+  <Project Path="src/SharpDb.Provider.MySql/SharpDb.Provider.MySql.csproj" />
+  <Project Path="src/SharpDb.Provider.Sqlite/SharpDb.Provider.Sqlite.csproj" />
+  <Project Path="src/SharpDb/SharpDb.csproj" />
+
+  <!--
+    The four test projects, each mirroring one production layer.
+  -->
+  <Project Path="tests/SharpDb.Core.Tests/SharpDb.Core.Tests.csproj" />
+  <Project Path="tests/SharpDb.Provider.MySql.Tests/SharpDb.Provider.MySql.Tests.csproj" />
+  <Project Path="tests/SharpDb.Provider.Sqlite.Tests/SharpDb.Provider.Sqlite.Tests.csproj" />
+  <Project Path="tests/SharpDb.Tests/SharpDb.Tests.csproj" />
+
+</Solution>
