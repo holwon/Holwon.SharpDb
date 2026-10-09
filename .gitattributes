@@ -1,0 +1,14 @@
+# Normalize line endings at the repo boundary so a script authored on Windows
+# behaves the same on the Linux CI runner.
+#
+# `.ps1` is pinned to LF: PowerShell Core reads either ending, but pinning removes
+# any dependence on the author's editor and on git's autocrlf setting.
+* text=auto
+
+*.ps1 text eol=lf
+*.sh  text eol=lf
+
+# Windows-only binaries must never be text-normalized.
+*.png binary
+*.jpg binary
+*.ico binary

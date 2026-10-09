@@ -1,0 +1,22 @@
+name: Docs check
+
+# Catches retired identifiers reappearing in the repo's documentation and tracker
+# artifacts. The build/test job (added by ticket 01) is a separate workflow — this
+# one stays green-or-red on its own.
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  retired-identifiers:
+    name: Retired identifiers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check retired identifiers
+        shell: pwsh
+        run: ./tools/check-retired-identifiers.ps1
