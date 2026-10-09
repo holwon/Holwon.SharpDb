@@ -18,5 +18,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check retired identifiers
-        shell: pwsh
-        run: ./tools/check-retired-identifiers.ps1
+        run: bash tools/check-retired-identifiers.sh

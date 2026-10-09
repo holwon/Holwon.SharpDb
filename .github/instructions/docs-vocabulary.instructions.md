@@ -10,8 +10,8 @@ Two checks with two different mechanisms. One is mechanical and has a script; on
 
 ## 1. Retired identifiers — run the check
 
-```powershell
-pwsh -File tools/check-retired-identifiers.ps1
+```bash
+bash tools/check-retired-identifiers.sh
 ```
 
 Also wired into CI. It fails when an identifier this project has **retired** (a renamed config key, a rejected interface shape) reappears outside the documents that explain the retirement. Run it before finishing any change that touches `.md`.
