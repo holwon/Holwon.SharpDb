@@ -50,22 +50,10 @@ internal static class HostProcess
     internal static async Task<HostRunResult> RunAsync(IReadOnlyDictionary<string, string?> environment)
     {
         // The host starts in a throwaway empty directory, so no configuration file the
-        // repository happens to contain can ever reach it (ADR 0008).
+        // repository happens to contain can ever reach it (ADR 0008). The directory outlives
+        // the child process, so it is disposed only once the run has finished.
         using var workingDirectory = new TempDirectory("sharpdb-host-");
 
-        return await RunInAsync(environment, workingDirectory.Info.FullName);
-    }
-
-    /// <summary>
-    /// Runs the host with the given environment from a directory the caller owns and cleans up.
-    /// </summary>
-    /// <param name="environment">The environment the host starts with.</param>
-    /// <param name="workingDirectory">The directory the host starts in.</param>
-    /// <returns>What the process did.</returns>
-    internal static async Task<HostRunResult> RunInAsync(
-        IReadOnlyDictionary<string, string?> environment,
-        string workingDirectory)
-    {
         if (!File.Exists(HostPath))
         {
             throw new InvalidOperationException($"The host was not built at '{HostPath}'.");
@@ -74,7 +62,7 @@ internal static class HostProcess
         var startInfo = new ProcessStartInfo
         {
             FileName = "dotnet",
-            WorkingDirectory = workingDirectory,
+            WorkingDirectory = workingDirectory.Info.FullName,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
