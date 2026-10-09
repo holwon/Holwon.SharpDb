@@ -25,6 +25,9 @@ internal static class ToolResults
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        // A closed set is named, not numbered: a referential action arrives as "Cascade", so the
+        // reader of a payload is told what the action is rather than being left to decode a number.
+        Converters = { new JsonStringEnumConverter() },
     };
 
     /// <summary>
@@ -36,5 +39,21 @@ internal static class ToolResults
     internal static CallToolResult Success<TPayload>(TPayload payload) => new()
     {
         Content = [new TextContentBlock { Text = JsonSerializer.Serialize(payload, Serializer) }],
+    };
+
+    /// <summary>
+    /// Wraps a message as a failed result, which is how a Tool reports a business failure.
+    /// </summary>
+    /// <param name="message">What went wrong, in words meant for the caller.</param>
+    /// <returns>The result the client receives, marked as an error.</returns>
+    /// <remarks>
+    /// The failure travels as a result rather than as an exception, and it carries a message the
+    /// caller can act on, because the SDK would flatten any exception into a generic sentence and
+    /// the caller would never learn why it was refused (ADR 0010).
+    /// </remarks>
+    internal static CallToolResult Failure(string message) => new()
+    {
+        IsError = true,
+        Content = [new TextContentBlock { Text = JsonSerializer.Serialize(new { error = message }, Serializer) }],
     };
 }

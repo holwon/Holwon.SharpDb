@@ -32,6 +32,37 @@ internal sealed class StubDatabaseProvider : IDatabaseProvider
     /// </summary>
     internal static readonly IReadOnlyList<string> Databases = ["main"];
 
+    /// <summary>
+    /// The structure reported for the one table the double can describe.
+    /// </summary>
+    /// <remarks>
+    /// It carries one of everything the model can hold — a comment, an auto-increment column, a
+    /// default, a foreign key with two different actions, and an index — so the shape the Tool
+    /// publishes is exercised whole rather than one field at a time. It is also deliberately
+    /// coherent: the foreign key's local column is a column of the table, as it would have to be in
+    /// a real database.
+    /// </remarks>
+    internal static readonly TableSchema Users = new(
+        Name: "users",
+        Type: TableType.Table,
+        Comment: "User accounts",
+        Columns:
+        [
+            new ColumnInfo("id", 1, "INTEGER", IsNullable: false, DefaultValue: null, IsAutoIncrement: true, Comment: null),
+            new ColumnInfo("org_id", 2, "INTEGER", IsNullable: false, DefaultValue: null, IsAutoIncrement: false, Comment: null),
+            new ColumnInfo("name", 3, "TEXT", IsNullable: false, DefaultValue: null, IsAutoIncrement: false, Comment: "Full name"),
+            new ColumnInfo("role", 4, "TEXT", IsNullable: false, DefaultValue: "'member'", IsAutoIncrement: false, Comment: null),
+        ],
+        PrimaryKey: ["id"],
+        ForeignKeys:
+        [
+            new ForeignKeyInfo("fk_users_org", ["org_id"], "orgs", ["id"], ForeignKeyAction.Cascade, ForeignKeyAction.NoAction),
+        ],
+        Indexes:
+        [
+            new IndexInfo("idx_users_name", IsUnique: false, Columns: ["name"]),
+        ]);
+
     /// <inheritdoc/>
     public string Type => "stub";
 
@@ -49,6 +80,13 @@ internal sealed class StubDatabaseProvider : IDatabaseProvider
     public Task<IReadOnlyList<TableInfo>> ListTablesAsync(
         DbConnection connection,
         CancellationToken cancellationToken) => Task.FromResult(Tables);
+
+    /// <inheritdoc/>
+    public Task<TableSchema?> DescribeTableAsync(
+        DbConnection connection,
+        string tableName,
+        CancellationToken cancellationToken) => Task.FromResult(
+            string.Equals(tableName, Users.Name, StringComparison.Ordinal) ? Users : null);
 
     /// <inheritdoc/>
     public Task<IReadOnlyList<string>> ListDatabasesAsync(

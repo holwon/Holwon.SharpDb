@@ -45,10 +45,37 @@ public interface IDatabaseProvider
     /// </returns>
     /// <exception cref="DbException">The database refused the query.</exception>
     /// <remarks>
-    /// Only the connection's own database is inspected; the server is bound to one (ADR 0009).
+    /// Only the connection's own database is inspected; the server is bound to one.
     /// Views are listed alongside tables, and each entry says which it is.
     /// </remarks>
     Task<IReadOnlyList<TableInfo>> ListTablesAsync(DbConnection connection, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Describes one table or view: its columns, primary key, foreign keys and indexes.
+    /// </summary>
+    /// <param name="connection">An open connection to the database to inspect.</param>
+    /// <param name="tableName">The name of the table or view to describe.</param>
+    /// <param name="cancellationToken">Cancels the description.</param>
+    /// <returns>
+    /// The table's whole structure, or <see langword="null"/> when the database holds no table or
+    /// view by that name.
+    /// </returns>
+    /// <exception cref="DbException">The database refused the query.</exception>
+    /// <remarks>
+    /// A missing table is reported as <see langword="null"/> rather than as an exception, because
+    /// not finding a name a caller guessed is an answer, not a fault. Deciding what to tell the
+    /// client about it belongs to the Tool, which is where the wording lives.
+    /// <para>
+    /// Only the connection's own database is inspected; the server is bound to one. Whether a name
+    /// that differs in case from the stored one matches is left to the engine, which is what
+    /// defines identifier matching: SQLite folds case either way, while a server that does not may
+    /// need the name spelled as the catalogue holds it.
+    /// </para>
+    /// </remarks>
+    Task<TableSchema?> DescribeTableAsync(
+        DbConnection connection,
+        string tableName,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Lists the databases the connection can see, for information only.
