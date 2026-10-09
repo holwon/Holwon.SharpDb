@@ -14,6 +14,16 @@ _Avoid_：Driver、Connector、Adapter、Plugin
 Provider 底层使用的第三方 ADO.NET 包（如 MySqlConnector、Microsoft.Data.Sqlite）。Driver 是实现细节，只被 Provider 引用；讨论"支持某个数据库"时说的是 Provider，不是 Driver。
 _Avoid_：用 Driver 指代 Provider
 
+### 组成
+
+**Core**：
+与数据库无关的服务器主体：Provider 契约、Schema model、只读 Guard、查询执行与 Tool 定义。Core 不引用任何 Driver，也不引用任何具体 Provider。
+_Avoid_：Engine、Runtime、Server
+
+**Host**：
+把 Core 与各 Provider 组装为可执行程序的装配层：读取配置、按配置的数据库类型装配对应的 Provider、承载 global tool 入口。
+_Avoid_：用 Host 指代 Core
+
 ### 结构表示
 
 **Schema model**：
@@ -37,5 +47,5 @@ _Avoid_：用 Guard 指代它
 ### 对外接口
 
 **Tool**：
-服务器暴露给 AI 客户端的操作。v1 恰好四个：`execute_query`、`list_tables`、`describe_table`、`list_databases`。
+服务器暴露给 AI 客户端的操作。v1 有四个：`execute_query`、`list_tables`、`describe_table`、`list_databases`。
 _Avoid_：Command、Endpoint、Function
