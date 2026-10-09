@@ -213,7 +213,9 @@ Guard 固定用 `SqlParser.Dialects.GenericDialect` + **超集**允许清单（A
 
 **关键字前缀启发式被否决**——已证实的绕过路径太多（注释隐藏关键字、`WITH ... INSERT`、`EXPLAIN ANALYZE` + DML、`SELECT ... INTO`、PRAGMA 赋值、堆叠语句）。
 
-**PRAGMA 不在允许清单里**（见 ADR 0005）。票 03 逐条实测后确认：“只读 `Pragma`”无法按名区分，因为 `PRAGMA journal_mode('WAL')` 与 `PRAGMA user_version(42)` 都置 `IsEqual = false` 却真的写入。**探查 SQLite 表结构请用表值形式**（`SELECT * FROM pragma_table_info(?)`），不要用 `PRAGMA table_info(...)`——后者是 Guard 的拒绝路径。
+**PRAGMA 不在允许清单里**（见 ADR 0005）。票 03 逐条实测后确认：“只读 `Pragma`”无法按名区分，因为 `PRAGMA journal_mode('WAL')` 与 `PRAGMA user_version(42)` 都置 `IsEqual = false` 却真的写入。
+
+**注意那条拒绝只针对 `execute_query`，管不到 Provider 的内省 SQL**——内省 SQL 本就不经过 Guard，且实测 PRAGMA 在只读连接上工作正常。Provider 用表值形式的真实理由是**能绑定参数**：`PRAGMA table_info(@table)` 报错，`SELECT * FROM pragma_table_info(@table)` 可用。表名因此不必拼字符串，也没有引号转义那一类 bug。
 
 ### Core 与 Provider 的职责分界
 

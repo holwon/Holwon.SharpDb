@@ -2,7 +2,10 @@
 
   <!--
     Mirrors the SharpDb.Provider.Sqlite layer: integration tests drive the
-    Provider's own four members against a real (in-memory) database.
+    Provider's own members against a real SQLite database in a temporary file.
+    A file, not an in-memory database, because the Provider opens every
+    connection in Mode=ReadOnly and a shared-cache in-memory database cannot be
+    reopened in that mode; see SqliteTestDatabase for the measurements.
   -->
   <PropertyGroup>
     <IsPackable>false</IsPackable>

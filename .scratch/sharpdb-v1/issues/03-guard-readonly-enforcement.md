@@ -71,7 +71,7 @@
 |---|---|
 | `spec.md` 实现决策「只读：三层」 | 允许清单删去「只读 `Pragma`」，并加一段说明 |
 | `spec.md` 「关键字前缀启发式被否决」 | 绕过清单订正为实测确认的范围，并指向表值形式 |
-| `spec.md` `list_databases` 段 | SQLite 侧由 `PRAGMA database_list` 改为 `SELECT * FROM pragma_database_list`（前者过不了 Guard，后者是普通 SELECT） |
+| `spec.md` `list_databases` 段 | SQLite 侧由 `PRAGMA database_list` 改为 `SELECT * FROM pragma_database_list`（理由见下） |
 | `spec.md` seam 1 测试段 | 与票 03 的实测清单对齐 |
 | `docs/adr/0005` | 允许清单删去「只读 `Pragma`」，加记「为什么排除」 |
 | `docs/adr/0002` | 绕过清单订正（见下），并指出「只读 PRAGMA」已不在允许清单 |
