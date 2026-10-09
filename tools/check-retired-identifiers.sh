@@ -61,12 +61,14 @@ echo 'Checking retired identifiers...'
 # --- Env-var prefix: ADR 0006 settled on the double underscore. ---------------
 # `__` is the .NET configuration hierarchy separator; the single-underscore form
 # is a DIFFERENT variable that SILENTLY fails to bind. Every allowlisted path
-# below is a document whose job is to explain that very contrast.
+# below is a document whose job is to explain that very contrast — including the
+# startup test that proves the single-underscore form does not bind.
 check 'SHARPDB_TYPE' 'SHARPDB__TYPE' \
   'docs/adr/0006-double-underscore-env-prefix.md|SHARPDB_TYPE' \
   'docs/research/mcp-sdk-mechanics.md|SHARPDB_TYPE' \
   '.scratch/sharpdb-mcp/issues/06-config-startup-and-distribution.md|SHARPDB_TYPE' \
-  '.scratch/sharpdb-v1/spec.md|SHARPDB_TYPE'
+  '.scratch/sharpdb-v1/spec.md|SHARPDB_TYPE' \
+  'tests/SharpDb.Tests/Startup/StartupContractTests.cs|SHARPDB_TYPE'
 
 check 'SHARPDB_CONNECTION_STRING' 'SHARPDB__CONNECTIONSTRING' \
   '.scratch/sharpdb-mcp/issues/06-config-startup-and-distribution.md|SHARPDB_CONNECTION_STRING'

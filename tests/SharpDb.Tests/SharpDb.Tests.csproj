@@ -24,4 +24,14 @@
     <ProjectReference Include="..\..\src\SharpDb\SharpDb.csproj" />
   </ItemGroup>
 
+  <!--
+    The host must be launched as its own process, and it must not be copied next to
+    the tests: the tests need no compile-time reference to it, only its path. The
+    build of the ProjectReference above has already produced it.
+  -->
+  <ItemGroup>
+    <AssemblyMetadata Include="SharpDbHostPath"
+                      Value="$(MSBuildProjectDirectory)/../../src/SharpDb/bin/$(Configuration)/net8.0/SharpDb.dll" />
+  </ItemGroup>
+
 </Project>

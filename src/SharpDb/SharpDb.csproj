@@ -11,6 +11,16 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
+  <!--
+    The host composes the configuration itself: environment variables are read straight
+    into SharpDbOptions, and no other source is registered (ADR 0008). Core declares the
+    options type and owns the binder; the environment-variable provider is the host's.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\SharpDb.Core\SharpDb.Core.csproj" />
     <ProjectReference Include="..\SharpDb.Provider.MySql\SharpDb.Provider.MySql.csproj" />
