@@ -332,6 +332,25 @@ public class ReadOnlyGuardTests
     }
 
     [Theory]
+    [InlineData("SELECT * FROM pragma_table_info('users')")]
+    [InlineData("SELECT * FROM pragma_table_info(@table)")]
+    [InlineData("SELECT * FROM pragma_index_list('users')")]
+    [InlineData("SELECT * FROM pragma_foreign_key_list('users')")]
+    [InlineData("SELECT * FROM pragma_database_list")]
+    [InlineData("SELECT * FROM pragma_table_list")]
+    public void The_table_valued_pragma_form_reaches_the_same_answers_and_is_allowed(string sql)
+    {
+        // PRAGMA is refused, so the client needs another way to reach the same answers — and this
+        // is it, because these are ordinary SELECTs. Pinning the equivalence here keeps the
+        // refusal's advice from going stale: if the permit list ever stops admitting these, the
+        // claim that nothing was lost stops being true, and this test says so.
+        //
+        // The bound-parameter spelling matters too: it is what lets a provider pass a table name
+        // without string interpolation.
+        Assert.True(ReadOnlyGuard.Inspect(sql).IsAllowed);
+    }
+
+    [Theory]
     [InlineData("PRAGMA query_only")]
     [InlineData("PRAGMA query_only = 0")]
     [InlineData("PRAGMA journal_mode = 'WAL'")]

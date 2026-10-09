@@ -33,9 +33,9 @@
 
 ## Comments
 
-**2026-10-09 — 完成。** 验收项全部落地，`dotnet build SharpDb.slnx -warnaserror` 0 警告 0 错误；`dotnet test SharpDb.slnx` 双绿（`SharpDb.Core.Tests` **91** 例——全部为本票新增，`SharpDb.Tests` 12 例，失败 0；合计 103）。
+**2026-10-09 — 完成。** 验收项全部落地，`dotnet build SharpDb.slnx -warnaserror` 0 警告 0 错误；`dotnet test SharpDb.slnx` 双绿（`SharpDb.Core.Tests` **97** 例——全部为本票新增，`SharpDb.Tests` 12 例，失败 0；合计 109）。
 
-交付物：`src/SharpDb.Core/Guard/ReadOnlyGuard.cs`（策略）、`ReadOnlyDecision.cs`（结论）、`tests/SharpDb.Core.Tests/Guard/ReadOnlyGuardTests.cs`（91 例）。
+交付物：`src/SharpDb.Core/Guard/ReadOnlyGuard.cs`（策略）、`ReadOnlyDecision.cs`（结论）、`tests/SharpDb.Core.Tests/Guard/ReadOnlyGuardTests.cs`（97 例）。
 
 ### 本票最要紧的一条：**允许清单是类型白名单，不是关键字黑名单**
 
@@ -63,20 +63,45 @@
 - 失败原因是**解析器要求括号里的实参是一个 value**，而 `users` 是裸标识符 → 语法错。加引号即可通过：`PRAGMA table_info('users')` 在**两种方言下都解析成功**并得到一个 `Pragma` 节点，随后被白名单拒绝。
 - 因此 **ADR 0005 的原文是对的**——方言确实不参与分类，GenericDialect 与 SQLiteDialect 逐条一致。本票对它的「更正」作废，**不要**按先前的说法去改 ADR 0005。
 
-### 需要更新的既有文档（**尚未改**，留待决定）
+### 已更新的既有文档
 
-本票把一个 spec 验收项从「允许」改成了「拒绝」，而三处上游文档仍写着旧行为，现在与代码矛盾：
+本票把一个 spec 验收项从「允许」改成了「拒绝」，四处上游文档原先写着旧行为。**已改**（用户拍板后）：
 
-| 文档 | 原文 | 现状 |
+| 文档 | 改动 |
+|---|---|
+| `spec.md` 实现决策「只读：三层」 | 允许清单删去「只读 `Pragma`」，并加一段说明 |
+| `spec.md` 「关键字前缀启发式被否决」 | 绕过清单订正为实测确认的范围，并指向表值形式 |
+| `spec.md` `list_databases` 段 | SQLite 侧由 `PRAGMA database_list` 改为 `SELECT * FROM pragma_database_list`（前者过不了 Guard，后者是普通 SELECT） |
+| `spec.md` seam 1 测试段 | 与票 03 的实测清单对齐 |
+| `docs/adr/0005` | 允许清单删去「只读 `Pragma`」，加记「为什么排除」 |
+| `docs/adr/0002` | 绕过清单订正（见下），并指出「只读 PRAGMA」已不在允许清单 |
+
+**spec 的用户故事未改**——那是「要什么」（what），PRAGMA 的使用者目标由 `describe_table` 与表值形式满足，故事本身没错，是「怎么做」（how）过时了。
+
+### 决定「不放开 PRAGMA」的实测依据
+
+票 03 原文要求「允许只读 PRAGMA、拒绝赋值形式」。**这个区分做不到**，实测（Microsoft.Data.Sqlite 10.0.12）：
+
+| PRAGMA | `IsEqual` | 实际效果 |
 |---|---|---|
-| `spec.md` 用户故事 47 | 「我想执行只读的 `PRAGMA`（SQLite）」 | 未实现（表值写法是等价替代） |
-| `spec.md` 实现决策「只读：三层」 | 允许「只读 `Pragma`（拒绝赋值形式）」 | 现为一律拒绝 |
-| `docs/adr/0005` | 允许清单含「只读 `Pragma`」 | 现为一律拒绝 |
-| `docs/adr/0002` | 把 `REPLACE INTO`、`LOAD DATA`、`HANDLER`、`LOCK TABLES`、`DO` 列为「需要额外处理的绕过路径」 | 实测在 0.6.5 里是**语法错**，解析器已挡下，无需 AST 规则 |
+| `PRAGMA user_version(42)` | **false** | **写了**：0 → 42（写进文件头） |
+| `PRAGMA journal_mode('WAL')` | **false** | **写了**：journal_mode 由 delete → wal |
 
-最后一行的含义：**ADR 0002 与 `docs/research/readonly-sql-enforcement.md` 的绕过清单被高估了。** 那份清单来自 Rust `sqlparser-rs` 的覆盖面推断，但 C# 移植版的语法覆盖更小——几种 MySQL 语句在解析阶段就失败。这不削弱 ADR 0002 的结论（解析器仍不够、需要引擎层兜底），只是把「解析器独自拦不住的那些」和「解析器根本读不懂的那些」混淆了。
+`IsEqual` 是**括号 vs 等号**的区分（**语法**），不是**读 vs 写**的区分（**语义**）。两者都能写。
 
-**我没有擅自修改 ADR 与 spec**——`docs/agents/domain.md` 要求与既有 ADR 矛盾时显式指出而非静默覆盖。上面这张表就是那一「显式指出」。要不要改这几处，请拍板。
+要安全放行就得手工维护一份「哪些 pragma 名是只读的」清单，并随 SQLite 版本演进。而收益为零：
+
+- **AI 的探查需求由 `describe_table` 工具满足**（它比 `PRAGMA table_info` 给得更多：列 + 主键 + 外键 + 索引）。
+- **Provider 自己的内省走表值形式**（`SELECT * FROM pragma_table_info(?)`），summary 里已写明这是「Provider 的首选形式」——理由不是安全，是**能绑定参数**。
+- 就算放开，**最自然的写法照样过不了**：`PRAGMA table_info(users)` 在 0.6.5 里是语法错（实参须是 value），只有加引号的 `PRAGMA table_info('users')` 能解析。
+
+### 顺带订正：绕过的确切范围被高估过
+
+**ADR 0002 与 `docs/research/readonly-sql-enforcement.md` 的绕过清单比实测范围大。** 那份清单来自 Rust crate `sqlparser-rs` 的覆盖面推断，但 C# 移植版的语法覆盖更小——`REPLACE INTO`、`LOAD DATA`、`HANDLER`、`LOCK TABLES`、`DO` 在 0.6.5 里是**语法错**，解析器在策略运行之前就拒了它们。
+
+需要**策略**处理的只是：注释隐藏关键字、`WITH … INSERT`、`EXPLAIN ANALYZE` 后接 DML、`SELECT … INTO`、`PRAGMA` 赋值。
+
+这不削弱 ADR 0002 的结论（解析器仍不够、需要引擎层兜底），只是原先把「解析器独自拦不住的那些」和「解析器根本读不懂的那些」混为一谈了。**ADR 0002 已按此订正。**
 
 ### `ANALYZE` 为什么不看标志位
 

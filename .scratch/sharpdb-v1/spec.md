@@ -205,13 +205,15 @@ public interface IDatabaseProvider
 
 | 层 | 归属 | 内容 |
 |---|---|---|
-| 1. Guard | Core（领域服务） | `SqlParserCS`（MIT, 0.6.5）解析；恰好一条语句；允许 `Select` / `Explain`（递归检查内层）/ `Show` 各变体 / 只读 `Pragma`（拒绝赋值形式）；拒绝 `SELECT ... INTO`；拒绝逃逸函数（如 `LOAD_FILE(`、`GET_LOCK(`） |
+| 1. Guard | Core（领域服务） | `SqlParserCS`（MIT, 0.6.5）解析；恰好一条语句；允许 `Select` / `Explain`（递归检查内层）/ `Show` 各变体；拒绝 `SELECT ... INTO`；拒绝逃逸函数（如 `LOAD_FILE(`、`GET_LOCK(`） |
 | 2. 引擎级只读 | Provider（适配器） | MySQL `SET SESSION TRANSACTION READ ONLY`；SQLite 连接串 `Mode=ReadOnly` |
 | 3. 最小权限账号 | 文档 | 不在代码中强制；README 明确说明这才是真正的边界 |
 
 Guard 固定用 `SqlParser.Dialects.GenericDialect` + **超集**允许清单（ADR 0005）。已知缺口：`GenericDialect` 不接受 SQLite 的 `[方括号]` 标识符——接受此缺口（方括号是 SQL Server 风格，在 SQLite 中罕见）。
 
-**关键字前缀启发式被否决**——已证实的绕过路径太多（注释隐藏关键字、`WITH ... INSERT`、`EXPLAIN ANALYZE` + DML、`SELECT ... INTO OUTFILE`、PRAGMA 赋值、`REPLACE INTO`、堆叠语句）。
+**关键字前缀启发式被否决**——已证实的绕过路径太多（注释隐藏关键字、`WITH ... INSERT`、`EXPLAIN ANALYZE` + DML、`SELECT ... INTO`、PRAGMA 赋值、堆叠语句）。
+
+**PRAGMA 不在允许清单里**（见 ADR 0005）。票 03 逐条实测后确认：“只读 `Pragma`”无法按名区分，因为 `PRAGMA journal_mode('WAL')` 与 `PRAGMA user_version(42)` 都置 `IsEqual = false` 却真的写入。**探查 SQLite 表结构请用表值形式**（`SELECT * FROM pragma_table_info(?)`），不要用 `PRAGMA table_info(...)`——后者是 Guard 的拒绝路径。
 
 ### Core 与 Provider 的职责分界
 
@@ -275,7 +277,7 @@ Guard 固定用 `SqlParser.Dialects.GenericDialect` + **超集**允许清单（A
 
 **`describe_table`** —— `table`（必填）。返回聚合根的单对象形态：`{name, type, comment?, columns[], primaryKey[], foreignKeys[], indexes[]}`。空值省略。`primaryKey` 是纯字符串数组；`indexes` **排除主键**；`ForeignKeyAction` 序列化为枚举名（`"Cascade"` 等）。表不存在时返回错误。
 
-**`list_databases`** —— 无参数。MySQL 用 `SCHEMATA`；SQLite 用 `PRAGMA database_list`（→ `["main"]`）。**v1 不支持跨 schema 探查**（`list_tables` 不加 `database` 参数）——`list_databases` 只是信息性的。
+**`list_databases`** —— 无参数。MySQL 用 `SCHEMATA`；SQLite 用 `SELECT * FROM pragma_database_list`（→ `["main"]`）。**v1 不支持跨 schema 探查**（`list_tables` 不加 `database` 参数）——`list_databases` 只是信息性的。
 
 ### 错误返回机制（ADR 0010）
 
@@ -323,7 +325,7 @@ CI = GitHub Actions **单 job**：`setup-dotnet` → `dotnet build SharpDb.slnx`
 
 **1. Guard（Core，纯单元测试，无 DB）**
 
-测 ticket 02 的完整绕过清单（每条一个用例）：注释隐藏关键字、`WITH ... INSERT`、`EXPLAIN ANALYZE` + DML、`SELECT ... INTO OUTFILE`、SQLite PRAGMA 赋值、`REPLACE INTO`、堆叠语句、逃逸函数。另测允许清单的正例（`SELECT` / `EXPLAIN` / `SHOW` / 只读 `PRAGMA` / CTE），以及拒绝文案的内容。
+测 ticket 03 的完整绕过清单（每条一个用例）：注释隐藏关键字、`WITH ... INSERT`、`EXPLAIN ANALYZE` + DML、`SELECT ... INTO`、PRAGMA、堆叠语句、逃逸函数。另测允许清单的正例（`SELECT` / `EXPLAIN` / `SHOW` / CTE），以及拒绝文案的内容。
 
 **2. `IDatabaseProvider`（Provider 集成测试，真库）**
 
