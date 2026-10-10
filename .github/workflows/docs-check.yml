@@ -5,7 +5,7 @@ name: Docs check
 # one stays green-or-red on its own.
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
 
 permissions:
