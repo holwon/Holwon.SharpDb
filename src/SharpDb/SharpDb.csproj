@@ -53,9 +53,15 @@
     The repository README is packed as the package's readme, so the installation
     instructions a client sees on nuget.org are the same ones the repository
     serves. Packed from the repository root because that is the only copy there is.
+
+    The LICENSE text is packed alongside it for the same reason, and one more:
+    GPL-3.0 requires that whoever receives the program also receives a copy of the
+    licence. `PackageLicenseExpression` alone only names it and links to it, so
+    without this the package would ship the terms by reference rather than in hand.
   -->
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="/" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <!--

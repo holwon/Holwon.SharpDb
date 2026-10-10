@@ -77,3 +77,9 @@
 
 修正提交：`a7b6c92`。
 
+### 七、发布前补的一件事：包内带上 LICENSE
+
+原包只有 `PackageLicenseExpression=GPL-3.0-only` 与 `README.md`，**没有 LICENSE 正文**。`PackageLicenseExpression` 只是"指名 + 给链接"，而 GPL-3.0 要求把程序交付给谁、就把许可证副本一并交付给谁——既然如此，正文应当随包走，而不是让接收者自己去网上取。已加 `LICENSE` 随包（实测包内 35149 字节）。
+
+**尚未完成、需要用户执行的一件事**：包**从未发布到 nuget.org**（实测 `https://api.nuget.org/v3-flatcontainer/holwon.sharpdb.mcp/index.json` 返回 404）。因此 README 的 `dotnet tool install --global Holwon.SharpDb.Mcp` 目前对第三方**尚不工作**——本机之所以装得上，是从本地 `artifacts/` 目录装的。票 08 的"别人能按 README 装一次"要到发布之后才真正成立。发布需要 API key，不在 agent 可执行范围内。
+
