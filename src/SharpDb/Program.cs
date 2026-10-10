@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SharpDb.Abstractions;
 using SharpDb.Core.Configuration;
+using SharpDb.Core.Mcp;
 using SharpDb.Core.Startup;
 using SharpDb.Provider.MySql;
 using SharpDb.Provider.Sqlite;
@@ -15,10 +16,10 @@ namespace SharpDb;
 /// </summary>
 /// <remarks>
 /// Startup is a short, strictly ordered sequence: read the configuration, pick the Provider the
-/// requested database type names, and prove the database answers. Anything that goes wrong ends
-/// the process right there with one line on stderr, because an MCP client shows that line to the
-/// user while it would never show the runtime output of a server that started anyway (ADR 0007).
-/// After a successful probe the process still exits; the stdio loop arrives with the Tools.
+/// requested database type names, prove the database answers, and only then serve the stdio loop.
+/// Anything that goes wrong before the loop ends the process right there with one line on stderr,
+/// because an MCP client shows that line to the user while it would never show the runtime output
+/// of a server that started anyway (ADR 0007).
 /// </remarks>
 internal static class Program
 {
@@ -58,9 +59,26 @@ internal static class Program
             // would escape startup as a stack trace instead of a reason (ADR 0003).
             builder.Services.AddSingleton(provider);
 
+            // The options carry the limits and the timeout every query is run with, so the Tools
+            // resolve them rather than reading the environment a second time.
+            builder.Services.AddSingleton(options);
+
+            // The four Tools, registered by type rather than discovered by reflection: the set a
+            // client sees is decided here, and a change to it is a change to this line (ADR 0003).
+            builder.Services
+                .AddMcpServer()
+                .WithTools<SchemaTools>()
+                .WithTools<QueryTools>()
+                .WithStdioServerTransport();
+
             using var host = builder.Build();
 
+            // The database is proven reachable before the loop starts, so a bad connection string
+            // is a startup failure rather than a failure of whichever call happens to be first.
             await StartupProbe.ProbeAsync(provider, options);
+
+            // Runs until the client closes the pipe, which is how an MCP stdio server is stopped.
+            await host.RunAsync();
 
             return SuccessExitCode;
         }

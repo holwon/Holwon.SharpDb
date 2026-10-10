@@ -19,18 +19,23 @@ namespace SharpDb.Core.Tests.Mcp;
 /// The client here is a real <see cref="McpClient"/> talking over an in-memory pipe to a real
 /// server, so the test covers the whole path a client takes — tool registration, the schema the
 /// server publishes, and invocation. It asserts the shape of the surface, not the depth of the
-/// behaviour: the introspection itself is covered against a real database in the Provider's tests.
+/// behaviour: the introspection and the query results are covered against a real database in the
+/// Provider's tests, and here the database is a double so the surface can be exercised without one.
 /// </remarks>
-public class SchemaToolTests
+public class McpSurfaceTests
 {
     [Fact]
-    public async Task The_server_lists_the_schema_tools()
+    public async Task The_server_lists_exactly_the_four_tools()
     {
+        // The set is fixed, and a client that finds four tools need never handle a server that
+        // offers a different set.
         await using var session = await McpSession.StartAsync();
 
         var names = (await session.Client.ListToolsAsync()).Select(tool => tool.Name);
 
-        Assert.Equal(["describe_table", "list_databases", "list_tables"], names.Order().ToArray());
+        Assert.Equal(
+            ["describe_table", "execute_query", "list_databases", "list_tables"],
+            names.Order().ToArray());
     }
 
     [Fact]
@@ -62,6 +67,42 @@ public class SchemaToolTests
         Assert.Contains("tables and views", descriptions["list_tables"]);
         Assert.Contains("informational only", descriptions["list_databases"]);
         Assert.Contains("primary key", descriptions["describe_table"]);
+        Assert.Contains("read-only", descriptions["execute_query"]);
+    }
+
+    [Fact]
+    public async Task The_execute_query_tool_requires_the_statement()
+    {
+        await using var session = await McpSession.StartAsync();
+
+        var tool = (await session.Client.ListToolsAsync()).Single(t => t.Name == "execute_query");
+        var schema = tool.JsonSchema;
+
+        // Only the statement is required: the parameters and the row limit are optional, and a
+        // caller that has neither must be able to call the tool with the statement alone.
+        var required = schema.GetProperty("required").EnumerateArray().Select(e => e.GetString());
+
+        Assert.Equal("sql", Assert.Single(required));
+    }
+
+    [Fact]
+    public async Task A_statement_that_is_not_read_only_comes_back_as_an_error()
+    {
+        // The refusal travels as a failed result, not as a protocol error, so the caller can read
+        // why it was refused (ADR 0010). The database is never reached, so the double suffices.
+        await using var session = await McpSession.StartAsync();
+
+        var result = await session.Client.CallToolAsync(
+            "execute_query",
+            new Dictionary<string, object?> { ["sql"] = "DELETE FROM users" });
+
+        Assert.True(result.IsError);
+
+        using var payload = JsonDocument.Parse(TextOf(result));
+        var reason = payload.RootElement.GetProperty("error").GetString();
+
+        Assert.Contains("Statement rejected", reason);
+        Assert.Contains("Only SELECT, EXPLAIN and SHOW", reason);
     }
 
     [Fact]
@@ -208,6 +249,7 @@ public class SchemaToolTests
             builder.Services
                 .AddMcpServer()
                 .WithTools<SchemaTools>()
+                .WithTools<QueryTools>()
                 .WithStreamServerTransport(
                     clientToServer.Reader.AsStream(),
                     serverToClient.Writer.AsStream());

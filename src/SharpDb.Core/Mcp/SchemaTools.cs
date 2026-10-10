@@ -32,27 +32,7 @@ public sealed class SchemaTools(IDatabaseProvider provider, SharpDbOptions optio
     /// <summary>
     /// The connection string every call connects with, proven present when the Tools were built.
     /// </summary>
-    /// <remarks>
-    /// A blank string is refused here rather than at the first call: it can only mean the wiring
-    /// put these Tools ahead of the startup check, and substituting an empty string would surface
-    /// later as an obscure database error instead of the wiring defect it is.
-    /// </remarks>
-    private readonly string _connectionString = ConnectionStringOf(options);
-
-    /// <summary>
-    /// Reads the connection string the Tools must use.
-    /// </summary>
-    /// <param name="options">The configuration read at startup.</param>
-    /// <returns>The connection string, which is never blank.</returns>
-    /// <exception cref="InvalidOperationException">The configuration carries no connection string.</exception>
-    private static string ConnectionStringOf(SharpDbOptions options)
-    {
-        var connectionString = options?.ConnectionString;
-        return string.IsNullOrWhiteSpace(connectionString)
-            ? throw new InvalidOperationException(
-                $"The {nameof(SchemaTools)} were built without a connection string.")
-            : connectionString;
-    }
+    private readonly string _connectionString = ToolConnectionString.Required(options);
 
     /// <summary>
     /// Lists every table and view in the connected database.

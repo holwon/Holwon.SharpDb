@@ -6,6 +6,12 @@
     A file, not an in-memory database, because the Provider opens every
     connection in Mode=ReadOnly and a shared-cache in-memory database cannot be
     reopened in that mode; see SqliteTestDatabase for the measurements.
+
+    It also drives Core's query Tool on a connection this Provider opened. The
+    spec's second test seam is "the Provider, against a real database", and its
+    coverage list names query execution, parameters and the row limit — so the
+    query behaviour is asserted here, where a real database exists, rather than
+    in SharpDb.Core.Tests, which has none.
   -->
   <PropertyGroup>
     <IsPackable>false</IsPackable>
@@ -24,6 +30,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\SharpDb.Core\SharpDb.Core.csproj" />
     <ProjectReference Include="..\..\src\SharpDb.Provider.Sqlite\SharpDb.Provider.Sqlite.csproj" />
   </ItemGroup>
 

@@ -63,6 +63,7 @@ internal static class HostProcess
         {
             FileName = "dotnet",
             WorkingDirectory = workingDirectory.Info.FullName,
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -78,6 +79,11 @@ internal static class HostProcess
 
         using var process = new Process { StartInfo = startInfo };
         process.Start();
+
+        // The host serves a stdio loop and stops when its input ends, which is how an MCP client
+        // stops it. Closing the pipe here is what makes a run finish rather than wait: the host
+        // reads end-of-input and returns, exactly as it would when its client went away.
+        process.StandardInput.Close();
 
         var standardOutput = process.StandardOutput.ReadToEndAsync();
         var standardError = process.StandardError.ReadToEndAsync();
@@ -102,7 +108,7 @@ internal static class HostProcess
     /// <value>
     /// The absolute path of <c>SharpDb.dll</c> in the host's build output.
     /// </value>
-    private static string HostPath { get; } =
+    internal static string HostPath { get; } =
         typeof(HostProcess).Assembly
             .GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(attribute => attribute.Key == HostPathMetadataKey)
@@ -122,7 +128,12 @@ internal static class HostProcess
     /// </remarks>
     internal static string HostDirectory => Path.GetDirectoryName(HostPath)!;
 
-    private static void RemoveAmbientConfiguration(ProcessStartInfo startInfo)
+    /// <summary>
+    /// Removes every already-set <c>SHARPDB</c> variable from a process's environment, so a test
+    /// decides the whole configuration and no ambient value can leak in.
+    /// </summary>
+    /// <param name="startInfo">The start information to strip.</param>
+    internal static void RemoveAmbientConfiguration(ProcessStartInfo startInfo)
     {
         var ambient = startInfo.Environment.Keys
             .Where(key => key.StartsWith("SHARPDB", StringComparison.OrdinalIgnoreCase))
