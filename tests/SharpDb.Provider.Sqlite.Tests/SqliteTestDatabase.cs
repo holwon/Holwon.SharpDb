@@ -47,6 +47,15 @@ internal sealed class SqliteTestDatabase : IDisposable
     internal string ConnectionString { get; }
 
     /// <summary>
+    /// The directory the database file lives in, which is deleted when this database is disposed.
+    /// </summary>
+    /// <value>
+    /// The local path an error message must not disclose (ADR 0010), which is what makes this the
+    /// value the shared suite's disclosure assertion runs against on this engine.
+    /// </value>
+    internal string DirectoryPath => _directory;
+
+    /// <summary>
     /// Creates a database, runs the given schema against it through a writable connection, and
     /// closes that connection so the Provider is the only one that ever opens the file.
     /// </summary>

@@ -318,6 +318,29 @@ public abstract class QueryContractSuite(IContractDatabase database)
     }
 
     /// <summary>
+    /// An error message carries neither a secret nor a path of this machine.
+    /// </summary>
+    /// <remarks>
+    /// ADR 0010 keeps two things out of every message a caller reads: the connection string's
+    /// credentials, and file paths. Each engine supplies the value it can vouch for — MySQL its
+    /// password, SQLite its database file's directory — and neither message carries it today,
+    /// measured. So this assertion is a tripwire rather than a reproduction: it fires if a Driver
+    /// or a server version starts including what a reader must never receive. That is the most a
+    /// test can do where the message cannot be provoked to contain the value in the first place,
+    /// and it runs on both engines, which is what the ticket's redaction rule asks for.
+    /// </remarks>
+    [SkippableFact]
+    public async Task An_error_message_discloses_nothing_sensitive()
+    {
+        Database.SkipWhenUnavailable();
+
+        var result = await Query().ExecuteQueryAsync("SELECT id FROM no_such_table");
+
+        Assert.True(result.IsError);
+        Assert.DoesNotContain(Database.SensitiveText, ToolPayload.Error(result), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// A query that outlives its timeout reports the timeout and what to do about it.
     /// </summary>
     /// <remarks>

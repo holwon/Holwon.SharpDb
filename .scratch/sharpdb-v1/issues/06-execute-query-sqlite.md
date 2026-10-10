@@ -101,3 +101,5 @@ ADR 0010 要求把文件路径换成 `<path>`。实测 SQLite 打开失败的消
 - **裸相对路径不脱敏**：见上，已写在 XML docs 里。
 
 `bash tools/check-retired-identifiers.sh`（经 Git 的 bash）通过。本 Comment 未新增退役标识符。
+
+实现提交：`b2f7500`。

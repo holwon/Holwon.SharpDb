@@ -53,6 +53,15 @@ public sealed class SqliteContractDatabase : IContractDatabase, IAsyncLifetime
     public string SkipReason => string.Empty;
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// The directory the database file lives in — the local path ADR 0010 keeps out of messages.
+    /// The file is created before any test runs, so a read before then would mean the wiring put a
+    /// test ahead of the fixture, which is a defect rather than an answer.
+    /// </remarks>
+    public string SensitiveText =>
+        _file?.DirectoryPath ?? throw new InvalidOperationException("The database has not been created yet.");
+
+    /// <inheritdoc/>
     public async Task InitializeAsync() =>
         _file = await SqliteTestDatabase.CreateAsync(ContractSchema.SqliteDdl);
 

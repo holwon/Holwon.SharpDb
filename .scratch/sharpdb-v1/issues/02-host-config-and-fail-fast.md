@@ -49,3 +49,5 @@
 已知边界：`ProviderCatalog` 的构造函数会在两个 Provider 声称同一类型时抛 `ArgumentException`——这是 Host 装配处的**开发者**错误（编译期就能发现），不是用户配置错误，故不在 fail-fast 的 catch 范围内。
 
 `bash tools/check-retired-identifiers.sh` 通过。为此在脚本的 allowlist 里加了 `tests/SharpDb.Tests/Startup/StartupContractTests.cs`——该测试证明单下划线拼写**不**绑定，本就必须写出那个已退役的字面量，正属于"解释这次退役"的站点。本 Comment 自身则改用描述性说法，不新增 allowlist 条目。
+
+实现提交：`b3eb2c5`。

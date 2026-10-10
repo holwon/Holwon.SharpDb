@@ -44,3 +44,5 @@
 
 `bash tools/check-retired-identifiers.sh` 通过（本次不涉及 `.md` 词汇变更，仍跑一遍确认无回归）。
 
+实现提交：`52dadd8`（骨架与解决方案文件）。
+

@@ -79,4 +79,21 @@ public interface IContractDatabase
     /// The skip reason, meaningful only when <see cref="Available"/> is <see langword="false"/>.
     /// </value>
     string SkipReason { get; }
+
+    /// <summary>
+    /// A value an error message must never carry: the engine's secret, or a path of this machine.
+    /// </summary>
+    /// <value>
+    /// What ADR 0010 protects — for MySQL the password the server was given, for SQLite the
+    /// directory the database file lives in. The shared suite asserts that a failed call does not
+    /// repeat it.
+    /// </value>
+    /// <remarks>
+    /// One value per engine, supplied by the fixture because only the fixture holds it. It is
+    /// deliberately one value rather than a set: the assertion is a tripwire for a message that
+    /// starts disclosing what it should not, not a scan for everything the fixture happens to
+    /// know. Neither engine's messages carry it today — measured — so the assertion stands as a
+    /// regression guard rather than as a reproduction.
+    /// </remarks>
+    string SensitiveText { get; }
 }

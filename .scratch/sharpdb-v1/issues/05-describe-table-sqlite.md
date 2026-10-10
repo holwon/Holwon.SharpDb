@@ -97,3 +97,5 @@
 7. **补两条反向边界测试**：① `UNIQUE` **约束**产生的 `sqlite_autoindex_*`（`origin='u'`）**必须被列出**——否则把 `origin <> 'pk'` 误写成 `<> 'c'` 不会被发现；② `describe_table` 的 `table` 参数在发布的 JSON Schema 里**确实是 required**。
 
 **未采纳**：一位审阅者建议把两个 Provider 里逐字节相同的 `Action(string)` / `AddTableParameter` 提到 `SharpDb.Abstractions` 共享。**不采纳**——`Abstractions` 是"无行为"的 Schema model + 一个端口（票 01 起即如此，且它没有测试项目），塞入引擎文本→枚举的映射会把它变成"有逻辑的库"；这点重复换来的独立性值得（ADR 0003：一个 Provider 的内部实现不与其他 Provider 耦合）。
+
+实现提交：`e1c5d69`。

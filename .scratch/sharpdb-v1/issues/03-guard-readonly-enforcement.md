@@ -139,3 +139,5 @@
 - **`EXPLAIN ANALYZE SELECT 1` 被放行**。这是**偏离** spec 验收项 53 的**字面**要求——它命名的目标是「借 EXPLAIN 执行写操作」，而写操作确实被拒了。额外付出的代价是只读查询的 `EXPLAIN ANALYZE` 也被放行。理由：一、只读，无状态改变；二、引擎层只读仍兜底；三、代价只在**本地只读服务器**上的执行成本，是使用者的资源。已写测试固定此行为（`Analyze_of_a_read_only_query_is_allowed`），以便它是有意为之而非疏漏。
 
 `bash tools/check-retired-identifiers.sh`（经 Git 的 bash）通过——本票不涉及新退役标识符，仍跑一遍确认无回归。
+
+实现提交：`0aa083e`（守卫）；`42e9caa`（permit 清单与 ADR 的文字订正）。

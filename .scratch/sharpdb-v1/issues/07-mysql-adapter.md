@@ -26,15 +26,17 @@
 
 ## Comments
 
-**2026-10-10 — 完成。** 十一条验收项逐条落地。`dotnet build SharpDb.slnx` 与 `dotnet test SharpDb.slnx` 全绿（**251** 例，失败 0；本票新增/改写集中在三个测试项目）。
+**2026-10-10 — 完成。** 十一条验收项逐条落地。`dotnet build SharpDb.slnx` 与 `dotnet test SharpDb.slnx` 全绿（提交 `c8df166` 时为 **251** 例，失败 0；本票新增/改写集中在三个测试项目）。
+
+实现提交：`c8df166`。——后继的双轴审阅又纠正了一处验收缺口与几处重复，见下方"双轴审阅后的修正"。
 
 **本票只改了测试，生产代码一行未动。** Provider 的实现早在票 04 / 05 落地（当时没有任何测试驱动它），本票补上的正是那份**共享契约套件**——外加容器化 MySQL 的真实覆盖。这本身就是 ADR 0003 / 0004 的验证：为 MySQL 写测试**没有触发任何 Core 改动**，连一个 Core 分支都没加。
 
 ### 交付物
 
-- `tests/SharpDb.Provider.Contract/` —— **共享契约套件**：`IContractDatabase`（每引擎交出的东西）+ `ProviderContractSuite`（内省 22 例）+ `QueryContractSuite`（查询 16 例）+ `ContractSchema`（两份 DDL）+ `ToolPayload` / `QueryTool` / `ContractDatabaseExtensions`（三个助手）。**一个库、两份运行**
-- `tests/SharpDb.Provider.Sqlite.Tests/` —— 契约的 SQLite 运行 + 只保留 SQLite 独有行为的分解文件（**53** 例）
-- `tests/SharpDb.Provider.MySql.Tests/` —— 契约的 MySQL 运行 + MySQL 专属 11 例（**49** 例 = 22 + 16 + 11）
+- `tests/SharpDb.Provider.Contract/` —— **共享契约套件**：`IContractDatabase`（每引擎交出的东西）+ `ProviderContractSuite`（内省 22 例）+ `QueryContractSuite`（查询 17 例）+ `ContractSchema`（两份 DDL）+ `ToolPayload` / `QueryTool` / `ContractDatabaseExtensions`（三个助手）。**一个库、两份运行**
+- `tests/SharpDb.Provider.Sqlite.Tests/` —— 契约的 SQLite 运行 + 只保留 SQLite 独有行为的分解文件（**54** 例）
+- `tests/SharpDb.Provider.MySql.Tests/` —— 契约的 MySQL 运行 + MySQL 专属 11 例（**50** 例 = 22 + 17 + 11）
 - `SharpDb.slnx` —— 收入契约项目
 
 ### 一、共享契约：**同一份断言跑两遍**，且逐字段实测过可比性
@@ -57,10 +59,10 @@ xunit 2.9.3 **没有**动态跳过（`Assert.Skip` / `SkipException.ForSkip` 是
 验证方式：把测试项目挂进 `mcr.microsoft.com/dotnet/sdk:8.0` 容器、**不给 docker socket**：
 
 ```
-Skipped! - Failed: 0, Passed: 0, Skipped: 49, Total: 49
+Skipped! - Failed: 0, Passed: 0, Skipped: 50, Total: 50
 ```
 
-49 例全部跳过、0 失败。**这条路在 Windows 本机测不出来**——探针实测：即使把 `DOCKER_HOST` 指向死掉的 `tcp://127.0.0.1:1`，Testcontainers 的端点解析链会**回退到本机 npipe 并成功**（`EnvironmentEndpointAuthenticationProvider` 不可用则继续尝试 `NpipeEndpointAuthenticationProvider`），所以"假端点"证明不了任何事。
+50 例全部跳过、0 失败。**这条路在 Windows 本机测不出来**——探针实测：即使把 `DOCKER_HOST` 指向死掉的 `tcp://127.0.0.1:1`，Testcontainers 的端点解析链会**回退到本机 npipe 并成功**（`EnvironmentEndpointAuthenticationProvider` 不可用则继续尝试 `NpipeEndpointAuthenticationProvider`），所以"假端点"证明不了任何事。
 
 ### 三、容器共用与测试隔离：外加一条**架设陷阱**
 
@@ -95,3 +97,20 @@ Skipped! - Failed: 0, Passed: 0, Skipped: 49, Total: 49
 - **未测**：容器网络异常、`Allow User Variables=true` 连接串变体、MySQL 5.7（已 EOL）。
 
 `bash tools/check-retired-identifiers.sh`（经 Git 的 bash）通过。本 Comment 未新增退役标识符。
+
+### 六、双轴审阅后的修正（2026-10-10，第二次两轴审阅）
+
+对 `3917adf...HEAD` 跑了 Standards 与 Spec 两轴并行审阅。采纳的修正：
+
+1. **补上了真的缺一条验收项**：票面要求"执行查询：与 SQLite 同一套 … **脱敏**规则"，但共享套件此前**零条**脱敏断言。新增 `An_error_message_discloses_nothing_sensitive`，两库各跑一遍；`IContractDatabase` 因此新增 `SensitiveText`（MySQL 交密码、SQLite 交数据库文件所在目录）。**如实记录其性质**：两库今天都不会把该值放进消息（实测），所以这是**回归绊线**而非复现——能做的只有"让它在某天开始泄露时报警"。
+2. **消除两处重复**（Standards 基线气味）：① `SqliteQueryExecutionTests` 自己又写了一个 `ToolFor`，而本票刚抽出的 `QueryTool.For` 正是这个形状——改为调用共享 helper；② `SqliteDescribeTableTests` 把 create+open+describe 三行内联进约 10 个测试——改回单一 `DescribeAsync` 助手。
+3. **对齐 spec 的一处措辞**：spec 写"无 Docker / 无 MySQL 时 skip"，实现只把 **Docker 不可达**当作可跳过的理由（镜像坏了/端口冲突则响亮失败——故意如此，否则"静默不跑"会藏缺陷）。已在 spec 里把该句写窄，并在 `IContractDatabase.Available` 的 XML docs 里写明这条判断。
+4. **让 `triage-labels.md` 成为 Status 取值的真实来源**：新增 "Lifecycle values" 表（`ready-for-agent` / `claimed` / `resolved`），`issue-tracker.md` 的 Status 约定改指向它——此前"见 `triage-labels.md` 的角色串"与实际取值对不上（三套来源并存）。
+5. **补齐 01–06 与 07 的实现提交哈希**：`issue-tracker.md` 的生命周期规则第 3 条要求 Comment 含 commit hash，但全部票面都没有；已逐票补上（01 `52dadd8`、02 `b3eb2c5`、03 `0aa083e`+`42e9caa`、04 `5222c6f`+`d6ea51b`、05 `e1c5d69`、06 `b2f7500`、07 `c8df166`）。
+6. **补齐新测试方法的 XML 文档**：`SqliteQueryExecutionTests` 的方法此前无 `<summary>`，已加。
+
+**未采纳**：审阅指出 `c094e30` 把 07 置 `resolved` 时实现提交 `c8df166` 尚未落地（"解析先于实现"）。属实，但两个提交同属一次落地，且 `c094e30` 是用户为建立生命周期约定而做的提交——已在 commit message 里写明回填理由，不改历史。
+
+修正后复测：`dotnet build SharpDb.slnx` 0 警告 0 错误；`dotnet test SharpDb.slnx` **253** 例全绿（Core 132、Host 17、SQLite 54 = 22 + 17 + 15、MySQL 50 = 22 + 17 + 11）；无 Docker 的 SDK 容器里 MySQL 项目 **50 跳过 / 0 失败**。
+
+`bash tools/check-retired-identifiers.sh`（经 Git 的 bash）通过。

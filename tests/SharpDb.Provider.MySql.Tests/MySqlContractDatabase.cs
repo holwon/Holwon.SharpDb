@@ -72,6 +72,13 @@ public sealed class MySqlContractDatabase : IContractDatabase, IAsyncLifetime
     /// <inheritdoc/>
     public string SkipReason { get; private set; } = string.Empty;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The password the container's server was given: a credential rather than a path, and the
+    /// other kind of value ADR 0010 keeps out of the messages a caller reads.
+    /// </remarks>
+    public string SensitiveText => Password;
+
     /// <summary>
     /// The connection string the server's own administrator account opens with.
     /// </summary>

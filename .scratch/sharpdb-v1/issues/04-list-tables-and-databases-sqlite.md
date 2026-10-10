@@ -79,3 +79,5 @@ ADR 0010 的依据也一并复核：工具**抛异常**时 SDK 只回泛化文�
 - **Host 未接 stdio 循环**：票面只要求进程内 MCP 端到端。实测（`McpServer` + `StdioServerTransport`，stdin 立即 EOF）服务**干净退出、exit code 0**，故接上不会打破票 02 的成功路径测试——留给后续票。
 
 `bash tools/check-retired-identifiers.sh`（经 Git 的 bash）通过。本 Comment 未新增退役标识符。
+
+实现提交：`5222c6f`（Schema 模型与两个工具）；`d6ea51b`（票面文字与已交付内容对齐）。

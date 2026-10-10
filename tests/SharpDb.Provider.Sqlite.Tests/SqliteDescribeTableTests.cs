@@ -14,6 +14,10 @@ namespace SharpDb.Provider.Sqlite.Tests;
 /// here is what only SQLite does: a declared type that may be empty, autoincrement computed from
 /// the key's shape, an implicit foreign key target, an index a <c>UNIQUE</c> constraint creates,
 /// an expression's nameless column, a generated column, and a name matched case-insensitively.
+/// <para>
+/// Every test describes one table of its own through <see cref="DescribeAsync"/>, which is where
+/// the create-open-describe walk lives so no test repeats it.
+/// </para>
 /// </remarks>
 public class SqliteDescribeTableTests
 {
@@ -24,13 +28,7 @@ public class SqliteDescribeTableTests
     {
         // SQLite allows a column with no declared type at all. The declaration is what a caller has
         // to work with, so it is reported as written rather than normalised.
-        using var database = await SqliteTestDatabase.CreateAsync(
-            """CREATE TABLE raw (code, label VARCHAR(50));""");
-        await using var connection = await _provider.CreateReadOnlyConnectionAsync(
-            database.ConnectionString,
-            CancellationToken.None);
-
-        var schema = await _provider.DescribeTableAsync(connection, "raw", CancellationToken.None);
+        var schema = await DescribeAsync("""CREATE TABLE raw (code, label VARCHAR(50));""", "raw");
 
         Assert.NotNull(schema);
         Assert.Equal("", schema.Columns.Single(column => column.Name == "code").DataType);
@@ -42,15 +40,11 @@ public class SqliteDescribeTableTests
     {
         // SQLite records no such flag: whether a value is generated follows from the key being one
         // column and that column being declared INTEGER. Nothing else on the table is one.
-        using var database = await SqliteTestDatabase.CreateAsync(
+        var schema = await DescribeAsync(
             """
             CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT, role TEXT NOT NULL DEFAULT 'member');
-            """);
-        await using var connection = await _provider.CreateReadOnlyConnectionAsync(
-            database.ConnectionString,
-            CancellationToken.None);
-
-        var schema = await _provider.DescribeTableAsync(connection, "users", CancellationToken.None);
+            """,
+            "users");
 
         Assert.NotNull(schema);
         Assert.True(schema.Columns.Single(column => column.Name == "id").IsAutoIncrement);
@@ -64,13 +58,7 @@ public class SqliteDescribeTableTests
     {
         // Only the exact type name INTEGER makes a column an alias for the row id: a BIGINT key is
         // not one, so a value is not generated for it.
-        using var database = await SqliteTestDatabase.CreateAsync(
-            """CREATE TABLE big_key (id BIGINT PRIMARY KEY, label TEXT);""");
-        await using var connection = await _provider.CreateReadOnlyConnectionAsync(
-            database.ConnectionString,
-            CancellationToken.None);
-
-        var schema = await _provider.DescribeTableAsync(connection, "big_key", CancellationToken.None);
+        var schema = await DescribeAsync("""CREATE TABLE big_key (id BIGINT PRIMARY KEY, label TEXT);""", "big_key");
 
         Assert.NotNull(schema);
         Assert.False(schema.Columns.Single(column => column.Name == "id").IsAutoIncrement);
@@ -79,13 +67,9 @@ public class SqliteDescribeTableTests
     [Fact]
     public async Task DescribeTable_reports_the_default_expression_as_the_text_the_schema_wrote()
     {
-        using var database = await SqliteTestDatabase.CreateAsync(
-            """CREATE TABLE users (id INTEGER PRIMARY KEY, role TEXT NOT NULL DEFAULT 'member', email TEXT);""");
-        await using var connection = await _provider.CreateReadOnlyConnectionAsync(
-            database.ConnectionString,
-            CancellationToken.None);
-
-        var schema = await _provider.DescribeTableAsync(connection, "users", CancellationToken.None);
+        var schema = await DescribeAsync(
+            """CREATE TABLE users (id INTEGER PRIMARY KEY, role TEXT NOT NULL DEFAULT 'member', email TEXT);""",
+            "users");
 
         Assert.NotNull(schema);
         Assert.Equal("'member'", schema.Columns.Single(column => column.Name == "role").DefaultValue);
@@ -97,16 +81,12 @@ public class SqliteDescribeTableTests
     {
         // The schema named no referenced column, so there is none to report. This is an answer, not
         // a failure, so it must arrive as an empty list rather than as an error.
-        using var database = await SqliteTestDatabase.CreateAsync(
+        var schema = await DescribeAsync(
             """
             CREATE TABLE users (id INTEGER PRIMARY KEY);
             CREATE TABLE memberships (id INTEGER PRIMARY KEY, user_id INTEGER REFERENCES users);
-            """);
-        await using var connection = await _provider.CreateReadOnlyConnectionAsync(
-            database.ConnectionString,
-            CancellationToken.None);
-
-        var schema = await _provider.DescribeTableAsync(connection, "memberships", CancellationToken.None);
+            """,
+            "memberships");
 
         Assert.NotNull(schema);
         var foreignKey = Assert.Single(schema.ForeignKeys);
@@ -120,13 +100,9 @@ public class SqliteDescribeTableTests
     {
         // Excluding the primary key's index must not exclude every index the engine named itself:
         // a UNIQUE constraint makes one too, and it is an index of the table like any other.
-        using var database = await SqliteTestDatabase.CreateAsync(
-            """CREATE TABLE codes (id INTEGER PRIMARY KEY, code TEXT UNIQUE);""");
-        await using var connection = await _provider.CreateReadOnlyConnectionAsync(
-            database.ConnectionString,
-            CancellationToken.None);
-
-        var schema = await _provider.DescribeTableAsync(connection, "codes", CancellationToken.None);
+        var schema = await DescribeAsync(
+            """CREATE TABLE codes (id INTEGER PRIMARY KEY, code TEXT UNIQUE);""",
+            "codes");
 
         Assert.NotNull(schema);
         var index = Assert.Single(schema.Indexes);
@@ -140,16 +116,12 @@ public class SqliteDescribeTableTests
     {
         // SQLite reports an expression's column with no name. There is no column name to hand back,
         // so the index arrives with none rather than the Provider failing on the absent value.
-        using var database = await SqliteTestDatabase.CreateAsync(
+        var schema = await DescribeAsync(
             """
             CREATE TABLE people (id INTEGER PRIMARY KEY, email TEXT);
             CREATE UNIQUE INDEX idx_people_email_lower ON people(lower(email));
-            """);
-        await using var connection = await _provider.CreateReadOnlyConnectionAsync(
-            database.ConnectionString,
-            CancellationToken.None);
-
-        var schema = await _provider.DescribeTableAsync(connection, "people", CancellationToken.None);
+            """,
+            "people");
 
         Assert.NotNull(schema);
         var index = Assert.Single(schema.Indexes);
@@ -163,15 +135,11 @@ public class SqliteDescribeTableTests
     {
         // pragma_table_info reports ordinary columns only; a generated column is not one a caller
         // can write, so it is left as the engine has it rather than asked for separately.
-        using var database = await SqliteTestDatabase.CreateAsync(
+        var schema = await DescribeAsync(
             """
             CREATE TABLE metrics (id INTEGER PRIMARY KEY, base INTEGER, doubled INTEGER GENERATED ALWAYS AS (base * 2));
-            """);
-        await using var connection = await _provider.CreateReadOnlyConnectionAsync(
-            database.ConnectionString,
-            CancellationToken.None);
-
-        var schema = await _provider.DescribeTableAsync(connection, "metrics", CancellationToken.None);
+            """,
+            "metrics");
 
         Assert.NotNull(schema);
         Assert.Equal(["id", "base"], schema.Columns.Select(column => column.Name));
@@ -182,13 +150,9 @@ public class SqliteDescribeTableTests
     {
         // SQLite matches identifiers case-insensitively, so a caller that asks for USERS is asking
         // about users; answering "no such table" would be wrong.
-        using var database = await SqliteTestDatabase.CreateAsync(
-            """CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);""");
-        await using var connection = await _provider.CreateReadOnlyConnectionAsync(
-            database.ConnectionString,
-            CancellationToken.None);
-
-        var schema = await _provider.DescribeTableAsync(connection, "USERS", CancellationToken.None);
+        var schema = await DescribeAsync(
+            """CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);""",
+            "USERS");
 
         Assert.NotNull(schema);
         Assert.Equal("users", schema.Name);
@@ -200,14 +164,32 @@ public class SqliteDescribeTableTests
     {
         // An AUTOINCREMENT table makes SQLite create sqlite_sequence beside the database's own
         // tables. It is not one of this database's tables and may not be described as if it were.
-        using var database = await SqliteTestDatabase.CreateAsync(
-            """CREATE TABLE tickets (id INTEGER PRIMARY KEY AUTOINCREMENT);""");
+        var schema = await DescribeAsync(
+            """CREATE TABLE tickets (id INTEGER PRIMARY KEY AUTOINCREMENT);""",
+            "sqlite_sequence");
+
+        Assert.Null(schema);
+    }
+
+    /// <summary>
+    /// Creates a database holding the given schema, describes one object in it, and answers with
+    /// the description.
+    /// </summary>
+    /// <param name="ddl">The DDL that gives the database its shape.</param>
+    /// <param name="tableName">The object to describe, as a caller would spell it.</param>
+    /// <returns>The object's structure, or <see langword="null"/> when the schema holds no such object.</returns>
+    /// <remarks>
+    /// The three steps every test here takes — create, open, describe — live in this one place, so
+    /// a test body holds only what makes it different: the schema it needs, the name it asks
+    /// about, and what the answer must be.
+    /// </remarks>
+    private async Task<TableSchema?> DescribeAsync(string ddl, string tableName)
+    {
+        using var database = await SqliteTestDatabase.CreateAsync(ddl);
         await using var connection = await _provider.CreateReadOnlyConnectionAsync(
             database.ConnectionString,
             CancellationToken.None);
 
-        var schema = await _provider.DescribeTableAsync(connection, "sqlite_sequence", CancellationToken.None);
-
-        Assert.Null(schema);
+        return await _provider.DescribeTableAsync(connection, tableName, CancellationToken.None);
     }
 }

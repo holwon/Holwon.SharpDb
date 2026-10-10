@@ -333,7 +333,7 @@ CI = GitHub Actions **单 job**：`setup-dotnet` → `dotnet build SharpDb.slnx`
 
 - **SQLite**：**命名共享缓存内存库**（`Data Source={guid};Mode=Memory;Cache=Shared;Pooling=False`）+ 一条**保活连接**（keeper）保证库存活。关键：**传连接字符串，不传连接实例**——每次调用开自己的连接（与"现开现关"吻合）。fixture 先以**可写**连接 seed DDL，再让 Provider 以只读打开。每个测试一个独立库名（含 GUID），天然并行安全。
 - **MySQL**：**Testcontainers.MySql**，镜像钉 **`mysql:8.0`**。容器启动成本高，用 collection fixture 共用一个容器，避免每测试起一个。
-- **无 Docker / 无 MySQL 时 skip**，不 fail。
+- **无 Docker 时 skip，不 fail**——但只把 "Docker 不可达" 当作可跳过的理由；容器能启动却起不来（镜像损坏、端口冲突等）必须**响亮失败**，否则"静默不跑"会成为缺陷的藏身处。
 - 覆盖：内省 SQL → Schema model 映射（表/视图/列/主键/外键/索引）、查询执行、参数化（`@name`）、行限截断、`list_databases`。
 - **契约测试共享套件**：把对 `IDatabaseProvider` 的行为断言抽成可复用套件，MySQL 与 SQLite 各跑一遍——这才真正验证 ADR 0003 的端口契约。
 
