@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Provider contract as executable assertions, written once and run by both engines'
+    test projects (ADR 0003: one deep port, verified the same way against every Provider).
+    A library rather than a test project: it holds no runnable tests of its own, only the
+    abstract suites each engine subclasses, so it carries the xunit attributes without a
+    runner.
+  -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!--
+      Not a test project: it holds no runnable test of its own, only the abstract suites the two
+      engines' projects subclass. Without this, `dotnet test` would try to run this assembly and
+      spawn a test host for a library that has nothing to run.
+    -->
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="Xunit.SkippableFact" Version="1.5.85" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SharpDb.Abstractions\SharpDb.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\SharpDb.Core\SharpDb.Core.csproj" />
+  </ItemGroup>
+
+</Project>

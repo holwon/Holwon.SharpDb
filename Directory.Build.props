@@ -2,7 +2,7 @@
 
   <!--
     Settings shared by every project in the repository. Kept deliberately small:
-    the target framework is declared once so the nine projects cannot drift, and
+    the target framework is declared once so the projects cannot drift, and
     modern C# defaults are on so the domain code has nothing to opt into.
     v1 adds no analyzer or formatting gate (see the v1 spec, "Out of Scope").
   -->

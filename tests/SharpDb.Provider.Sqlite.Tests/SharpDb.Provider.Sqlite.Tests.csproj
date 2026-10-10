@@ -32,6 +32,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\SharpDb.Core\SharpDb.Core.csproj" />
     <ProjectReference Include="..\..\src\SharpDb.Provider.Sqlite\SharpDb.Provider.Sqlite.csproj" />
+    <ProjectReference Include="..\SharpDb.Provider.Contract\SharpDb.Provider.Contract.csproj" />
   </ItemGroup>
 
 </Project>

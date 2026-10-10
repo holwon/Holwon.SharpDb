@@ -11,9 +11,13 @@
   <Project Path="src/SharpDb/SharpDb.csproj" />
 
   <!--
-    The four test projects, each mirroring one production layer.
+    The test projects, each mirroring one production layer, plus the shared
+    Provider contract: the assertions both engines run, which is where the
+    Provider port is verified as one contract rather than two lookalikes
+    (ADR 0003).
   -->
   <Project Path="tests/SharpDb.Core.Tests/SharpDb.Core.Tests.csproj" />
+  <Project Path="tests/SharpDb.Provider.Contract/SharpDb.Provider.Contract.csproj" />
   <Project Path="tests/SharpDb.Provider.MySql.Tests/SharpDb.Provider.MySql.Tests.csproj" />
   <Project Path="tests/SharpDb.Provider.Sqlite.Tests/SharpDb.Provider.Sqlite.Tests.csproj" />
   <Project Path="tests/SharpDb.Tests/SharpDb.Tests.csproj" />

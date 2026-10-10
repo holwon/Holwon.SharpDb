@@ -26,15 +26,15 @@
 
 ## Comments
 
-**2026-10-10 — 完成。** 十一条验收项逐条落地。`dotnet build SharpDb.slnx` 与 `dotnet test SharpDb.slnx` 全绿（**249** 例，失败 0；本票新增/改写集中在三个测试项目）。
+**2026-10-10 — 完成。** 十一条验收项逐条落地。`dotnet build SharpDb.slnx` 与 `dotnet test SharpDb.slnx` 全绿（**251** 例，失败 0；本票新增/改写集中在三个测试项目）。
 
 **本票只改了测试，生产代码一行未动。** Provider 的实现早在票 04 / 05 落地（当时没有任何测试驱动它），本票补上的正是那份**共享契约套件**——外加容器化 MySQL 的真实覆盖。这本身就是 ADR 0003 / 0004 的验证：为 MySQL 写测试**没有触发任何 Core 改动**，连一个 Core 分支都没加。
 
 ### 交付物
 
-- `tests/SharpDb.Provider.Contract/` —— **共享契约套件**：`IContractDatabase`（每引擎交出的东西）+ `ProviderContractSuite`（内省 22 例）+ `QueryContractSuite`（查询 18 例）+ `ContractSchema`（两份 DDL）+ `ToolPayload`（读 Tool 应答的助手）。**一个库、两份运行**
-- `tests/SharpDb.Provider.Sqlite.Tests/` —— 契约的 SQLite 运行 + 只保留 SQLite 独有行为的分解文件（52 例）
-- `tests/SharpDb.Provider.MySql.Tests/` —— 契约的 MySQL 运行 + MySQL 专属 11 例（46 例）
+- `tests/SharpDb.Provider.Contract/` —— **共享契约套件**：`IContractDatabase`（每引擎交出的东西）+ `ProviderContractSuite`（内省 22 例）+ `QueryContractSuite`（查询 16 例）+ `ContractSchema`（两份 DDL）+ `ToolPayload` / `QueryTool` / `ContractDatabaseExtensions`（三个助手）。**一个库、两份运行**
+- `tests/SharpDb.Provider.Sqlite.Tests/` —— 契约的 SQLite 运行 + 只保留 SQLite 独有行为的分解文件（**53** 例）
+- `tests/SharpDb.Provider.MySql.Tests/` —— 契约的 MySQL 运行 + MySQL 专属 11 例（**49** 例 = 22 + 16 + 11）
 - `SharpDb.slnx` —— 收入契约项目
 
 ### 一、共享契约：**同一份断言跑两遍**，且逐字段实测过可比性
@@ -57,10 +57,10 @@ xunit 2.9.3 **没有**动态跳过（`Assert.Skip` / `SkipException.ForSkip` 是
 验证方式：把测试项目挂进 `mcr.microsoft.com/dotnet/sdk:8.0` 容器、**不给 docker socket**：
 
 ```
-Skipped! - Failed: 0, Passed: 0, Skipped: 48, Total: 48
+Skipped! - Failed: 0, Passed: 0, Skipped: 49, Total: 49
 ```
 
-48 例全部跳过、0 失败。**这条路在 Windows 本机测不出来**——探针实测：即使把 `DOCKER_HOST` 指向死掉的 `tcp://127.0.0.1:1`，Testcontainers 的端点解析链会**回退到本机 npipe 并成功**（`EnvironmentEndpointAuthenticationProvider` 不可用则继续尝试 `NpipeEndpointAuthenticationProvider`），所以"假端点"证明不了任何事。
+49 例全部跳过、0 失败。**这条路在 Windows 本机测不出来**——探针实测：即使把 `DOCKER_HOST` 指向死掉的 `tcp://127.0.0.1:1`，Testcontainers 的端点解析链会**回退到本机 npipe 并成功**（`EnvironmentEndpointAuthenticationProvider` 不可用则继续尝试 `NpipeEndpointAuthenticationProvider`），所以"假端点"证明不了任何事。
 
 ### 三、容器共用与测试隔离：外加一条**架设陷阱**
 
