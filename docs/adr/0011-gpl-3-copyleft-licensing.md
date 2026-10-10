@@ -6,4 +6,4 @@ SharpDb 以 **GPL-3.0** 授权（`LICENSE` 全文 + `PackageLicenseExpression=GP
 
 **被否决的选项**：MIT / Apache-2.0（允许闭源分发，正是要避免的）；AGPL-3.0（在 GPL 之上对"通过网络提供服务"也加开源义务——SharpDb 是本地 stdio 进程、不起网络服务，这一条用不上，只会让许可文本与实际形态不符）。
 
-Consequences：`LICENSE` 与包的 `PackageLicenseExpression` 必须一致，否则 `dotnet pack` 拒绝出包；README 需向使用者明确写出"可商用、分发必须开源"。`PackageId` 与 `ToolCommandName` 已是公开契约，许可证同样是公开契约——发布后更改会追溯性地改变既有使用者的义务，因此这一条尤其难改。
+Consequences：`LICENSE` 全文与包的 `PackageLicenseExpression` **是两份各自独立的声明，没有任何工具保证它们一致**——`dotnet pack` 不读 `LICENSE`，也不会拿它与 `PackageLicenseExpression` 比对（实测：故意让两者不符，`dotnet pack` 照样 exit 0 出包）。二者只能靠人守：改其中一份时必须同步另一份，否则包元数据与仓库正文会各说各话。README 需向使用者明确写出"可商用、分发必须开源"。`PackageId` 与 `ToolCommandName` 已是公开契约，许可证同样是公开契约——发布后更改会追溯性地改变既有使用者的义务，因此这一条尤其难改。

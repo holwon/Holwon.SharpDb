@@ -63,7 +63,7 @@ Add a server entry to your MCP client's configuration — in `.vscode/mcp.json` 
 }
 ```
 
-The `command` is the tool's own shim and `args` stays empty: everything that varies lives in the `env` block, so nothing about the server needs editing when the database changes.
+The `command` is the command the install put on your `PATH`, and `args` stays empty: everything that varies lives in the `env` block, so nothing about the server needs editing when the database changes.
 
 The key names use a **double** underscore. That is the .NET configuration system's hierarchy separator; a single underscore spells a different variable, which the server silently does not read.
 
@@ -105,7 +105,7 @@ Every value comes from the `env` block. There is no configuration file to look f
 | Key | Required | Default | Meaning |
 |---|---|---|---|
 | `SHARPDB__TYPE` | yes | — | `mysql` or `sqlite`. |
-| `SHARPDB__CONNECTIONSTRING` | yes | — | Handed to the database type's driver. |
+| `SHARPDB__CONNECTIONSTRING` | yes | — | Passed through to the Driver that serves this database type. |
 | `SHARPDB__DEFAULTMAXROWS` | no | `100` | Rows returned when a query does not ask for a number. |
 | `SHARPDB__MAXROWS` | no | `1000` | The ceiling a query cannot raise, only be cut down to. |
 | `SHARPDB__TIMEOUTSECONDS` | no | `30` | How long a query may run before it is abandoned. |
@@ -162,7 +162,7 @@ SharpDb opens one connection while starting and **exits immediately** if anythin
 | `sharpdb: SHARPDB__TYPE is required (expected "mysql" or "sqlite").` | The `env` block is missing the type, or spells it with a single underscore. |
 | `sharpdb: SHARPDB__TYPE 'postgres' is unknown (expected "mysql" or "sqlite").` | A type was given that no database type serves. |
 | `sharpdb: SHARPDB__CONNECTIONSTRING is required and must not be blank.` | The connection string is missing or empty. |
-| `sharpdb: Could not connect to the mysql database: …` | The server reached the driver but could not connect — usually credentials, host or database name. |
+| `sharpdb: Could not connect to the mysql database: …` | The server could not connect — usually credentials, host or database name. |
 | `sharpdb: Invalid configuration: Failed to convert configuration value 'plenty' at 'SHARPDB:MaxRows' to type 'System.Int32'.` | A row limit or the timeout is not a number. |
 
 The reason is always one line, it always starts with `sharpdb: `, and it never includes the connection string.

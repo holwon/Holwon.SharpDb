@@ -1,30 +1,32 @@
-# Verifies the *installed* SharpDb tool the way the README tells a user to use it: install the
-# package, point the client's configuration at the `sharpdb-mcp` shim, then drive the four tools
-# over real stdio. Nothing here reads SharpDb's build output, and both databases are made from
-# scratch — a throwaway SQLite file and, when Docker is reachable, a throwaway MySQL container. The
-# subject is the command a user ends up with.
+# Accepts implementation ticket 08 the way the ticket defines it: install the package, point the
+# client's configuration at the `sharpdb-mcp` shim, then drive the four tools over real stdio.
 #
-# Why this is not a test project: every test in this repository runs the host *it* built. The
-# distribution claim is about the packaged tool — "one install serves MySQL and SQLite" — and only a
-# real install can exercise it. This is the ticket's acceptance harness.
+# Why this is not a test project: every test in this repository runs the host *it* just built. The
+# distribution claim is about the *packaged* tool — "one install serves MySQL and SQLite" — and only
+# a real install can exercise that. So this harness reads nothing from SharpDb's build output: both
+# databases are made from scratch, and it speaks to the shim a user ends up with.
 #
-# Usage:
+# Full run from a clean tree (this is the whole recipe; nothing here is implicit):
+#   dotnet build SharpDb.slnx -c Release
+#   dotnet pack src/SharpDb/SharpDb.csproj -c Release -o artifacts
 #   dotnet tool install --global Holwon.SharpDb.Mcp --add-source artifacts --version 0.1.0
 #   pwsh -File tools/verify-installed-tool.ps1
 #
 # Switches:
-#   -SkipMySql                  verify SQLite only (e.g. a machine without Docker)
-#   -MySqlConnectionString ...  verify an existing MySQL instead of provisioning one; it must
-#                               already hold the fixture in tools/seed-verification-mysql.sql
-#   -LogLevel X                 also print the stderr the tool produced at that level
+#   -SkipMySql    verify SQLite only, without asking for Docker at all. Use this to say "I am not
+#                 verifying MySQL today"; it is the only way MySQL is skipped.
+#   -LogLevel X   also print the stderr the tool produced at that level.
 #
-# Exit code 0 when every check passes (a skip does not fail), 1 otherwise.
+# MySQL is verified whenever Docker is present: Docker being there but unable to produce a container
+# is a FAILURE, not a skip. "Silently not running" is the one outcome a verification harness must
+# never produce, because it turns a broken environment into a green run.
+#
+# Exit code 0 when every check passed, 1 otherwise.
 
 [CmdletBinding()]
 param(
     [string] $LogLevel = '',
-    [switch] $SkipMySql,
-    [string] $MySqlConnectionString = ''
+    [switch] $SkipMySql
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,67 +38,21 @@ if (-not $shim) {
 
 $workspace = Join-Path $PWD 'artifacts'
 New-Item -ItemType Directory -Force -Path $workspace | Out-Null
-
-# --- SQLite: seeded by a file-based C# app, so the harness leans on nothing the package ships ----
-$sqlitePath = Join-Path $workspace 'verify.db'
-$sqlitePath = (dotnet run (Join-Path $PWD 'tools/seed-verification-database.cs') -- $sqlitePath |
-        Select-Object -Last 1).Trim()
-
-# --- MySQL: a throwaway container, seeded with the same schema and a SELECT-only account --------
 $containerName = 'sharpdb-verify-mysql'
 $provisionedContainer = $false
 
-if (-not $SkipMySql -and -not $MySqlConnectionString) {
-    $docker = Get-Command docker -ErrorAction SilentlyContinue
-    if ($docker) {
-        Write-Host 'Starting a throwaway MySQL container...'
-
-        # Seeding needs DDL, so the fixture is built with the root account; the tool is then pointed
-        # at a SELECT-only account, which is what the README tells a user to create.
-        #
-        # `Out-String` is avoided and `$LASTEXITCODE` is read immediately: piping docker's output
-        # through a cmdlet replaces the exit code with the cmdlet's, which would make a failed start
-        # look like a success.
-        $runOutput = docker run -d --name $containerName `
-            -e MYSQL_ROOT_PASSWORD=rootpass -e MYSQL_DATABASE=app -p 13306:3306 mysql:8.0 2>&1
-        $runExitCode = $LASTEXITCODE
-
-        if ($runExitCode -eq 0) {
-            $provisionedContainer = $true
-
-            $ready = $false
-            $deadline = (Get-Date).AddSeconds(180)
-            while (-not $ready -and (Get-Date) -lt $deadline) {
-                Start-Sleep -Seconds 3
-                docker exec $containerName mysqladmin ping -h 127.0.0.1 -uroot -prootpass --silent 2>&1 | Out-Null
-                $ready = $LASTEXITCODE -eq 0
-            }
-            if (-not $ready) { throw 'The MySQL container did not become ready within 180 seconds.' }
-
-            # The fixture is fed to mysql's stdin as one script, so no quoting layer can alter the
-            # account SQL it contains. The exit code is read before the output is filtered, for the
-            # same reason as above.
-            $seedPath = Join-Path $PWD 'tools/seed-verification-mysql.sql'
-            $seedPath = (Resolve-Path $seedPath).Path
-            $seedOutput = Get-Content $seedPath -Raw | docker exec -i $containerName mysql -uroot -prootpass 2>&1
-            $seedExitCode = $LASTEXITCODE
-            if ($seedExitCode -ne 0) {
-                throw "Seeding MySQL failed: $($seedOutput | Where-Object { $_ -notmatch 'Using a password' })"
-            }
-
-            $MySqlConnectionString = 'Server=127.0.0.1;Port=13306;Database=app;User ID=sharpdb_ro;' +
-                'Password=a-strong-password;SslMode=None'
-        }
-        else {
-            Write-Host "Docker could not start a container, so MySQL is skipped: $runOutput"
-        }
-    }
-    else {
-        Write-Host 'Docker is not installed, so MySQL is skipped.'
-    }
+$failures = 0
+function Assert-That {
+    param([bool] $Condition, [string] $What)
+    if ($Condition) { Write-Host "  ok   $What" }
+    else { Write-Host "  FAIL $What"; $script:failures++ }
 }
 
-# --- The MCP stdio framing: one JSON-RPC message per line --------------------
+# --- Child-process plumbing ---------------------------------------------------
+# The configuration is handed to the child only. Nothing here touches this process's own
+# environment: a harness that mutates it leaks into whatever runs next, and a run that leaves a
+# SHARPDB__ variable behind changes the behaviour of the next one.
+
 function Send-Message {
     param([System.IO.StreamWriter] $ToServer, [hashtable] $Message)
     $ToServer.WriteLine(($Message | ConvertTo-Json -Depth 20 -Compress))
@@ -133,24 +89,9 @@ function Invoke-Tool {
     return Receive-Until $FromServer $Id
 }
 
-$failures = 0
-function Assert-That {
-    param([bool] $Condition, [string] $What)
-    if ($Condition) { Write-Host "  ok   $What" }
-    else { Write-Host "  FAIL $What"; $script:failures++ }
-}
-
-# --- Drive one engine through the installed tool -----------------------------
-# Each engine gets its own process, because a process is bound to one database: that is also the
-# README's "more than one database means more than one server entry", exercised rather than quoted.
-function Test-Engine([string] $Type, [string] $ConnectionString) {
-    Write-Host "== $Type =="
-
-    $env:SHARPDB__TYPE = $Type
-    $env:SHARPDB__CONNECTIONSTRING = $ConnectionString
-    Remove-Item Env:\Logging__LogLevel__Default -ErrorAction SilentlyContinue
-    if ($LogLevel) { $env:Logging__LogLevel__Default = $LogLevel }
-
+# Starts the installed shim with exactly the given `env` block, which is the only configuration
+# channel a client has (ADR 0008). Returns the process plus the readers a test drives it through.
+function Start-Shim([hashtable] $Environment) {
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $shim
     $startInfo.RedirectStandardInput = $true
@@ -158,12 +99,123 @@ function Test-Engine([string] $Type, [string] $ConnectionString) {
     $startInfo.RedirectStandardError = $true
     $startInfo.UseShellExecute = $false
 
+    # The child inherits this process's environment, so the logging level has to be removed rather
+    # than merely not set: a developer with Logging__LogLevel__Default in their own environment
+    # would otherwise change what the logging checks observe.
+    $startInfo.Environment.Remove('Logging__LogLevel__Default') | Out-Null
+    if ($LogLevel) { $startInfo.Environment['Logging__LogLevel__Default'] = $LogLevel }
+
+    foreach ($key in $Environment.Keys) { $startInfo.Environment[$key] = $Environment[$key] }
+
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
     $null = $process.Start()
 
-    $toServer = $process.StandardInput
-    $fromServer = $process.StandardOutput
+    return @{
+        Process = $process
+        ToServer = $process.StandardInput
+        FromServer = $process.StandardOutput
+    }
+}
+
+function Stop-Shim($ShimProcess) {
+    try { $ShimProcess.Process.StandardInput.Close() } catch { }
+    if (-not $ShimProcess.Process.WaitForExit(30000)) { $ShimProcess.Process.Kill($true) }
+    $stderr = $ShimProcess.Process.StandardError.ReadToEnd()
+    $exitCode = $ShimProcess.Process.ExitCode
+    $ShimProcess.Process.Dispose()
+    return @{ Stderr = $stderr; ExitCode = $exitCode }
+}
+
+# Runs the installed shim with the given `env` block and no protocol traffic at all, which is what
+# a startup failure looks like from the outside: a process that exits on its own.
+function Start-And-Fail([hashtable] $Environment) {
+    $started = Start-Shim $Environment
+    $started.Process.StandardInput.Close()
+    if (-not $started.Process.WaitForExit(30000)) {
+        $started.Process.Kill($true)
+        throw 'The host did not exit on its own, so it did not fail fast.'
+    }
+    $stderr = $started.Process.StandardError.ReadToEnd()
+    $exitCode = $started.Process.ExitCode
+    $started.Process.Dispose()
+    return @{ Stderr = $stderr.Trim(); ExitCode = $exitCode }
+}
+
+# --- Fixtures -----------------------------------------------------------------
+# SQLite is seeded by a small sibling project rather than by SharpDb's build output. It targets
+# net8.0 so the harness needs no newer SDK than the README says the tool needs.
+#
+# It is built and run directly rather than through `dotnet run --project`: `dotnet run` adds the
+# project to the solution file as a side effect, which would leave the repository modified by
+# merely running a verification.
+Write-Host 'Seeding the SQLite fixture...'
+$seedProject = Join-Path $PWD 'tools/SeedVerificationDatabase'
+$sqlitePath = Join-Path $workspace 'verify.db'
+
+dotnet build $seedProject -c Release --nologo 2>&1 | Out-File -Encoding utf8 (Join-Path $workspace 'seed-build.log')
+if ($LASTEXITCODE -ne 0) { throw "Building the SQLite fixture failed; see $workspace/seed-build.log" }
+
+$seedAssembly = Join-Path $seedProject 'bin/Release/net8.0/SeedVerificationDatabase.dll'
+$seedPath = (dotnet $seedAssembly $sqlitePath | Select-Object -Last 1).Trim()
+if ($LASTEXITCODE -ne 0) { throw 'Seeding SQLite failed.' }
+
+if (-not $SkipMySql) {
+    $docker = Get-Command docker -ErrorAction SilentlyContinue
+    if (-not $docker) {
+        # No Docker at all is a machine that cannot verify MySQL, and saying so is the honest
+        # outcome. Docker being present but broken is handled below as a failure.
+        Write-Host 'MySQL is NOT verified: Docker is not installed.'
+    }
+    else {
+        Write-Host 'Starting a throwaway MySQL container...'
+
+        # Seeding needs DDL, so the fixture is built with the root account; the tool is then pointed
+        # at a SELECT-only account, which is what the README tells a user to create.
+        #
+        # `$LASTEXITCODE` is read on the line straight after docker runs: piping docker's output
+        # through a cmdlet would replace the exit code with the cmdlet's and make a failed start
+        # look like a success.
+        $runOutput = docker run -d --name $containerName `
+            -e MYSQL_ROOT_PASSWORD=rootpass -e MYSQL_DATABASE=app -p 13306:3306 mysql:8.0 2>&1
+        $runExitCode = $LASTEXITCODE
+        if ($runExitCode -ne 0) {
+            throw "Docker could not start the MySQL container. MySQL was NOT verified: $runOutput"
+        }
+
+        $provisionedContainer = $true
+        $ready = $false
+        $deadline = (Get-Date).AddSeconds(180)
+        while (-not $ready -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 3
+            docker exec $containerName mysqladmin ping -h 127.0.0.1 -uroot -prootpass --silent 2>&1 | Out-Null
+            $ready = $LASTEXITCODE -eq 0
+        }
+        if (-not $ready) { throw 'The MySQL container did not become ready within 180 seconds.' }
+
+        # The fixture is fed to mysql's stdin as one script, so no quoting layer can alter the
+        # account SQL it contains. The exit code is read before the output is filtered.
+        $seedSql = (Resolve-Path (Join-Path $PWD 'tools/seed-verification-mysql.sql')).Path
+        $seedOutput = Get-Content $seedSql -Raw | docker exec -i $containerName mysql -uroot -prootpass 2>&1
+        $seedExitCode = $LASTEXITCODE
+        if ($seedExitCode -ne 0) {
+            throw "Seeding MySQL failed: $($seedOutput | Where-Object { $_ -notmatch 'Using a password' })"
+        }
+
+        $MySqlConnectionString = 'Server=127.0.0.1;Port=13306;Database=app;User ID=sharpdb_ro;' +
+            'Password=a-strong-password;SslMode=None'
+    }
+}
+
+# --- Drive one engine through the installed tool ------------------------------
+# Each engine gets its own process, because a process is bound to one database: that is also the
+# README's "more than one database means more than one server entry", exercised rather than quoted.
+function Test-Engine([string] $Type, [string] $ConnectionString) {
+    Write-Host "== $Type =="
+
+    $started = Start-Shim @{ SHARPDB__TYPE = $Type; SHARPDB__CONNECTIONSTRING = $ConnectionString }
+    $toServer = $started.ToServer
+    $fromServer = $started.FromServer
 
     try {
         # --- handshake ------------------------------------------------------
@@ -227,13 +279,70 @@ function Test-Engine([string] $Type, [string] $ConnectionString) {
         Assert-That ($refused.result.content[0].text -match 'Statement rejected') 'the refusal explains itself'
     }
     finally {
-        try { $process.StandardInput.Close() } catch { }
-        if (-not $process.WaitForExit(30000)) { $process.Kill($true) }
-        $script:lastStderr = $process.StandardError.ReadToEnd()
-        $process.Dispose()
+        $script:lastStderr = (Stop-Shim $started).Stderr
     }
 }
 
+# --- The README's failure table, checked against the tool ---------------------
+# The README quotes these lines verbatim, so they are asserted rather than trusted: a quoted message
+# that no longer matches sends a user looking for text that does not appear. Each case pairs the
+# documented line with the environment that must produce it.
+function Test-StartupFailures {
+    Write-Host '== startup failures (the README table) =='
+
+    $cases = @(
+        @{
+            Documented = 'sharpdb: SHARPDB__TYPE is required (expected "mysql" or "sqlite").'
+            Because    = 'the type is missing'
+            Env        = @{ SHARPDB__CONNECTIONSTRING = 'Data Source=unused.db' }
+        },
+        @{
+            Documented = 'sharpdb: SHARPDB__TYPE ''postgres'' is unknown (expected "mysql" or "sqlite").'
+            Because    = 'the type is unknown'
+            Env        = @{ SHARPDB__TYPE = 'postgres'; SHARPDB__CONNECTIONSTRING = 'Data Source=unused.db' }
+        },
+        @{
+            Documented = 'sharpdb: SHARPDB__CONNECTIONSTRING is required and must not be blank.'
+            Because    = 'the connection string is missing'
+            Env        = @{ SHARPDB__TYPE = 'sqlite' }
+        },
+        @{
+            Documented = 'sharpdb: Could not connect to the mysql database:'
+            Because    = 'the mysql connection fails'
+            Env        = @{
+                SHARPDB__TYPE = 'mysql'
+                SHARPDB__CONNECTIONSTRING = 'Server=127.0.0.1;Port=1;Database=nope;User ID=nobody;SslMode=None'
+                SHARPDB__TIMEOUTSECONDS = '3'
+            }
+            Prefix     = $true
+        },
+        @{
+            Documented = "sharpdb: Invalid configuration: Failed to convert configuration value 'plenty' at 'SHARPDB:MaxRows' to type 'System.Int32'."
+            Because    = 'a row limit is not a number'
+            Env        = @{
+                SHARPDB__TYPE = 'sqlite'
+                SHARPDB__CONNECTIONSTRING = 'Data Source=unused.db'
+                SHARPDB__MAXROWS = 'plenty'
+            }
+        }
+    )
+
+    foreach ($case in $cases) {
+        $result = Start-And-Fail $case.Env
+        $matched = if ($case.Prefix) {
+            $result.Stderr.StartsWith($case.Documented)
+        }
+        else {
+            $result.Stderr -eq $case.Documented
+        }
+
+        Assert-That $matched "the README's line for '$($case.Because)' is what the tool prints"
+        if (-not $matched) { Write-Host "       expected: $($case.Documented)" ; Write-Host "       actual:   $($result.Stderr)" }
+        Assert-That ($result.ExitCode -eq 1) "'$($case.Because)' exits 1"
+    }
+}
+
+# --- Run ----------------------------------------------------------------------
 $engines = [ordered]@{ sqlite = "Data Source=$sqlitePath" }
 if ($MySqlConnectionString) {
     $engines['mysql'] = $MySqlConnectionString
@@ -250,17 +359,17 @@ try {
         Test-Engine $engine $engines[$engine]
         Write-Host ''
     }
+
+    Test-StartupFailures
 }
 finally {
-    Remove-Item Env:\SHARPDB__TYPE, Env:\SHARPDB__CONNECTIONSTRING -ErrorAction SilentlyContinue
-    Remove-Item Env:\Logging__LogLevel__Default -ErrorAction SilentlyContinue
-
     # The container is the harness's own fixture, so it goes however the run ended.
     if ($provisionedContainer) {
         docker rm -f $containerName 2>&1 | Out-Null
     }
 }
 
+Write-Host ''
 if ($LogLevel -and $lastStderr) {
     Write-Host "=== stderr at $LogLevel ==="
     Write-Host $lastStderr
@@ -271,6 +380,4 @@ if ($failures -eq 0) {
     exit 0
 }
 Write-Host "$failures check(s) failed."
-Write-Host '=== stderr ==='
-Write-Host $lastStderr
 exit 1

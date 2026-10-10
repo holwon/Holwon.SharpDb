@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The seeder for `tools/verify-installed-tool.ps1`'s SQLite fixture. It targets net8.0 because the
+    README tells a user the .NET 8 SDK is enough: the harness must not demand a newer SDK than the
+    thing it verifies. (A file-based C# app would have, which is why this is a project.)
+
+    It is deliberately NOT in SharpDb.slnx. The harness builds it by path, so `dotnet build` and
+    `dotnet test` on the solution stay exactly the product's own entry points, and the solution file
+    is not rewritten by running a verification.
+
+    The whole point of the harness is that it reads nothing SharpDb ships, which is why the fixture
+    is built here from a Driver rather than by borrowing the host's build output.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+  </ItemGroup>
+
+</Project>

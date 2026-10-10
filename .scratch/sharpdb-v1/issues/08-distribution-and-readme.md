@@ -60,3 +60,20 @@
 
 实现提交：`7e91b3b`。
 
+### 六、第二轮两轴复审后的修正
+
+对 `2a8d8e0`（`7e91b3b` 的父提交，即本票实际改动的起点）再跑一轮双轴复审，逐条修掉：
+
+1. **ADR 0011 有一句假断言（最重）。** 原文写"`LICENSE` 与 `PackageLicenseExpression` 必须一致，否则 `dotnet pack` 拒绝出包"。**实测否证**：故意让两者不符（不相关的 `LICENSE` + `PackageLicenseExpression=MIT`），`dotnet pack` 照样 exit 0、无警告出包，nuspec 写 `<license type="expression">MIT</license>`。已改为实话：两份声明互不校验，**只能靠人守**。
+2. **harness 会静默降级覆盖。** spec 明确要求"容器起不来必须**响亮失败**，否则'静默不跑'会成为缺陷的藏身处"，但旧版把 `docker run` 失败当成"跳过 MySQL"并最终 exit 0。现已改为 `throw`，并实测：占用容器名后运行 → **exit 1** 且打印真实原因。唯一保留的跳过是"这台机器没装 Docker"，且会明确打印 `MySQL is NOT verified`。
+3. **harness 跑不到 README 声明的前提上。** README 说装要 .NET 8 SDK，而旧 seeder 是文件式 C# app（需 SDK 10）——实测 pin 到 `8.0.425` 直接 exit 1。已改为普通 `net8.0` 工程 `tools/SeedVerificationDatabase/`。顺带发现 `dotnet run --project` 会把该工程**写进 `SharpDb.slnx`**，污染构建/测试入口；改为按路径 `dotnet build` + 直接跑 DLL，并实测运行后 `SharpDb.slnx` 无 diff。
+4. **README 的失败表此前无人校验。** 现由 harness 断言：5 个用例各自把文档化的那一行与**工具真实输出**逐字比对，并同时断言 exit 1。此前只有 SQLite 的 3 行是手工核过的，MySQL 那行从未验过。
+5. **README 词汇漂移。** `shim` 是行话（且未定义）、`Tool` 在 GLOSSARY 中专指 4 个 MCP 操作却被用来指 .NET global tool、"the database type's driver" 混淆了 `Driver` 与 `Provider`。已逐处改为平实说法或规范词（`Driver` 保留为已定义词）。
+6. **测试重复 helper** 收口：`StartupContractTests` 的成功用例改用 `EmptySqliteDatabase.Environment()`（其余用例故意用不存在的库/无法解析的连接串，不能共用）。
+
+修后复跑：验收 harness **50 项全绿**（SQLite 20 + MySQL 20 + README 失败表 10）、`dotnet test SharpDb.slnx` **257 例 0 失败**、`check-retired-identifiers.sh` 通过。
+
+（此前一处已记：harness 不再改动父进程环境变量，改为只给子进程注入 —— 上一版会设置并删除 `SHARPDB__*`，泄漏到后续进程。）
+
+修正提交：见提交历史。
+

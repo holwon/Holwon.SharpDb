@@ -114,11 +114,7 @@ public class StartupContractTests
     {
         using var database = new EmptySqliteDatabase();
 
-        var result = await HostProcess.RunAsync(new Dictionary<string, string?>
-        {
-            ["SHARPDB__TYPE"] = "sqlite",
-            ["SHARPDB__CONNECTIONSTRING"] = $"Data Source={database.DatabasePath}",
-        });
+        var result = await HostProcess.RunAsync(database.Environment());
 
         Assert.Equal(0, result.ExitCode);
         Assert.Empty(result.StandardOutput);
