@@ -147,5 +147,8 @@ PRAGMAs **cannot** be parameterised — the object name must be a literal. Two s
 | FK match type | ❌ | ⚠️ `match`, only `SIMPLE` enforced |
 | Schema qualifier | ✅ `TABLE_SCHEMA` (per database) | ⚠️ `main`/`temp`/attached DB |
 | Internal objects | ✅ filter by schema | ✅ filter `name NOT LIKE 'sqlite_%'` |
+| View column nullability / default | ✅ propagated from the base expression | ⚠️ reports no constraint at all |
 
 **Implication**: `Comment`, `Charset`, `Collation` and `FullDataType` are optional (nullable) on the neutral model. Auto-increment must be *computed* by the SQLite provider rather than read.
+
+**The view-column divergence is measured, and it runs the counter-intuitive way.** MySQL 8.0 (probed on a container) reports a view's columns with the base column's `IS_NULLABLE` and `COLUMN_DEFAULT`, so `CREATE VIEW active_users AS SELECT id FROM orders` yields `id` as `IS_NULLABLE='NO'`, `COLUMN_DEFAULT='0'` — the values came from the server, not from the reading code. SQLite reports the opposite, passing along no constraint at all: `pragma_table_info` on the same view yields `notnull = 0` and a NULL default. So the same view describes as nullable-with-no-default under SQLite and non-null-defaulting-to-0 under MySQL. The neutral model cannot reconcile these — it carries what each engine says — so a consumer that needs engine-independent answers must not rely on a view column's nullability or default.
