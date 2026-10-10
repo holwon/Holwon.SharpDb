@@ -7,7 +7,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] 五个生产项目存在且引用方向符合 ADR 0004：Provider 契约与 Schema model 独立成项目（不引 Driver、不引 parser）；Core 引 Dapper / SqlParserCS / MCP SDK 但**不引任何 Driver**；两个 Provider 各自独占自己的 Driver；可执行项目引用 Core 与全部 Provider
 - [x] 四个测试项目存在且镜像生产层级，逐项目引用对应的生产项目

@@ -4,7 +4,7 @@
 
 **Blocked by:** 04
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] SQLite Provider 实现描述表的能力，把 04 定型的 Schema 聚合**填满**
 - [x] `describe_table` 工具返回聚合根的单对象形态：名称、类型、可选注释、列数组、主键、外键数组、索引数组

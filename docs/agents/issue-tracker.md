@@ -18,6 +18,16 @@ Create a new file under `.scratch/<feature-slug>/` (creating the directory if ne
 
 Read the file at the referenced path. The user will normally pass the path or the issue number directly.
 
+## Implementation ticket lifecycle
+
+Implementation tickets (under `.scratch/<feature>/issues/`) start at `Status: ready-for-agent`. When the implementing agent finishes (code-review passed, committed), it:
+
+1. Sets `Status: resolved`
+2. Ticks every delivered checkbox in the acceptance list
+3. Appends a `## Comments` entry with the date, a summary of what was built, and the commit hash
+
+This is the local tracker's equivalent of "closing" an issue on a hosted tracker.
+
 ## Wayfinding operations
 
 Used by `/wayfinder`. The **map** is a file with one **child** file per ticket.

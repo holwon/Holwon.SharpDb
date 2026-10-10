@@ -4,7 +4,7 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] `IDatabaseProvider` 契约定型（**四个**成员；第五个 `DescribeTableAsync` 随票 05 落地——偏离票面"五个"的理由见下方 Comment），并在 Core 侧提供"由类型标识装配对应 Provider"的**显式**分支——零反射
 - [x] **Schema 聚合一次定型**：聚合根及其子对象（列 / 外键 / 索引）的结构、字段与不变量全部就位，即使本票只用到其中一部分

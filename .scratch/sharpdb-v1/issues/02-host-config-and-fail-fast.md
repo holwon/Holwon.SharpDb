@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] 配置只来自环境变量，绑定到单个不可变的 `SharpDbOptions`（类型 / 连接串 / 默认行限 / 硬行限 / 超时秒数），一次性读取
 - [x] 用双下划线分隔的键名（`SHARPDB__TYPE` 等）；同时确认单下划线形式**不会**被绑定

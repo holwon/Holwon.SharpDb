@@ -4,7 +4,7 @@
 
 **Blocked by:** 03, 05
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] `execute_query` 工具：必填 SQL + 可选参数对象 + 可选行数上限
 - [x] 参数用 `@name` 占位符；参数对象的键**不带** `@` 前缀

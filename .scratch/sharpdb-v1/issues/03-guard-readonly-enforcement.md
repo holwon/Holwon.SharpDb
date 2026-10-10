@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [x] 用 SQL 解析器把语句转成语法树来判定，**不用**关键字前缀猜测
 - [x] 恰好**一条**语句才通过——堆叠语句被拒绝
