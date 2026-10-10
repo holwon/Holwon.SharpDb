@@ -58,5 +58,5 @@
 
 **许可证**经用户确认为 GPL-3.0（可商用、衍生作品——含封装——必须同样开源），已落 `LICENSE` 全文 + `PackageLicenseExpression=GPL-3.0-only`，并补 ADR 0011 记录该决定（审阅指出这是未记录的公开契约）。
 
-实现提交：见本票 `Status: resolved` 时的提交。
+实现提交：`7e91b3b`。
 
