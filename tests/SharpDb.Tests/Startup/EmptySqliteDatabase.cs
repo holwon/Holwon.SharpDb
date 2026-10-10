@@ -36,6 +36,30 @@ internal sealed class EmptySqliteDatabase : IDisposable
     /// </value>
     internal string MissingDatabasePath => _directory.PathOf("missing.sqlite");
 
+    /// <summary>
+    /// The environment that serves this database over SQLite, which is what the host reads
+    /// instead of any configuration file (ADR 0008).
+    /// </summary>
+    /// <param name="logLevel">
+    /// A value for the standard logging key, or null to leave it unset so the default applies.
+    /// </param>
+    /// <returns>The environment the host starts with.</returns>
+    internal Dictionary<string, string?> Environment(string? logLevel = null)
+    {
+        var environment = new Dictionary<string, string?>
+        {
+            ["SHARPDB__TYPE"] = "sqlite",
+            ["SHARPDB__CONNECTIONSTRING"] = $"Data Source={DatabasePath}",
+        };
+
+        if (logLevel is not null)
+        {
+            environment["Logging__LogLevel__Default"] = logLevel;
+        }
+
+        return environment;
+    }
+
     /// <inheritdoc/>
     public void Dispose() => _directory.Dispose();
 }

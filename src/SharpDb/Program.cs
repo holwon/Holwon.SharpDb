@@ -120,6 +120,12 @@ internal static class Program
         // there desynchronises the client with no way to recover (ADR 0007).
         builder.Logging.AddConsole(console => console.LogToStandardErrorThreshold = LogLevel.Trace);
 
+        // The `Logging` section is bound explicitly, because the empty builder is empty in this
+        // respect too: it leaves the section unread, so `Logging__LogLevel__Default` would land in
+        // the configuration and change nothing. Reading it is what makes the ordinary key the way
+        // to raise or quiet the log, rather than a private switch this server invented.
+        builder.Logging.AddConfiguration(builder.Configuration.GetSection("Logging"));
+
         return builder;
     }
 }

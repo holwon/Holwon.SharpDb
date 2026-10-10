@@ -42,8 +42,7 @@ internal static class HostProcess
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(60);
 
     /// <summary>
-    /// Runs the host with exactly the given environment, cheating ambient configuration by
-    /// removing every already-set <c>SHARPDB</c> variable first.
+    /// Runs the host with exactly the given environment, cheating ambient configuration away first.
     /// </summary>
     /// <param name="environment">The environment the host starts with.</param>
     /// <returns>What the process did.</returns>
@@ -129,14 +128,23 @@ internal static class HostProcess
     internal static string HostDirectory => Path.GetDirectoryName(HostPath)!;
 
     /// <summary>
-    /// Removes every already-set <c>SHARPDB</c> variable from a process's environment, so a test
+    /// Removes every already-set configuration variable from a process's environment, so a test
     /// decides the whole configuration and no ambient value can leak in.
     /// </summary>
     /// <param name="startInfo">The start information to strip.</param>
+    /// <remarks>
+    /// Both prefixes are stripped. <c>SHARPDB</c> is the server's own configuration, and
+    /// <c>Logging</c> is the logging configuration: a developer who has
+    /// <c>Logging__LogLevel__Default</c> set in their own environment would otherwise change what
+    /// the logging tests observe, and an assertion would fail for a reason that is not in the
+    /// repository.
+    /// </remarks>
     internal static void RemoveAmbientConfiguration(ProcessStartInfo startInfo)
     {
+        var prefixes = new[] { "SHARPDB", "Logging__" };
+
         var ambient = startInfo.Environment.Keys
-            .Where(key => key.StartsWith("SHARPDB", StringComparison.OrdinalIgnoreCase))
+            .Where(key => prefixes.Any(prefix => key.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
         foreach (var key in ambient)

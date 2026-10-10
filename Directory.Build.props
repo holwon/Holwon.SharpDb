@@ -12,4 +12,20 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <!--
+    Only the Host is a package. The repository's five production projects are one
+    distribution unit — a single .NET global tool (ADR 0009) — so Core, the
+    Abstractions and the two Providers must never become packages of their own:
+    publishing them would invent install units nobody asked for, each with its own
+    version to keep in step, and a user could then assemble a combination the
+    project never tested.
+
+    Because this is the default rather than a per-project setting, a new library is
+    unpackable the moment it is created, and the Host is the one project that opts
+    back in.
+  -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
 </Project>

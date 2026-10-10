@@ -4,12 +4,59 @@
     The Host: the assembly layer that turns Core and the Providers into a running
     executable (ADR 0004). It references every Provider precisely so that Core
     does not have to; selecting one by database type is a runtime decision made
-    here. Packaging metadata (PackageId, ToolCommandName, PackAsTool) arrives
-    with the distribution work, not with the skeleton.
+    here.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
+
+  <!--
+    The distribution shape: one .NET global tool whose command name is the shim a
+    client points at (ADR 0009). Installing is `dotnet tool install` with the
+    Holwon.SharpDb.Mcp package id and the global flag, and from then on the
+    client's configuration names `sharpdb-mcp` directly, so the database type is
+    chosen at runtime rather than by choosing a package.
+
+    PackAsTool publishes the project and packs that output, which is how both
+    Providers travel inside this one package: the user gets MySQL and SQLite from
+    a single install and is not asked to know which one they need.
+
+    PackageId and ToolCommandName are published contracts. Changing either breaks
+    every configuration that already names them (ADR 0009).
+
+    IsPackable is turned back on here because the repository-wide default is off:
+    this is the one project that is a package.
+
+    RollForward is set because a framework-dependent application is otherwise
+    pinned to its own major version: the default policy looks for a .NET 8 runtime
+    and gives up if the machine only has a newer one, which is the common case for
+    a tool a user installs today. `Major` runs on .NET 8 when it is present and on
+    the next major version when it is not, which is what makes the README's
+    "running needs .NET 8 or any later major" true.
+  -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <PackageId>Holwon.SharpDb.Mcp</PackageId>
+    <ToolCommandName>sharpdb-mcp</ToolCommandName>
+    <RollForward>Major</RollForward>
+    <Version>0.1.0</Version>
+    <Description>Read-only MCP server that lets an AI agent inspect a relational database and run read-only queries. One install serves MySQL and SQLite; the database type is chosen at startup from the client's environment block.</Description>
+    <PackageTags>mcp;model-context-protocol;database;mysql;sqlite;readonly</PackageTags>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/holwon/Holwon.SharpDb.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <!--
+    The repository README is packed as the package's readme, so the installation
+    instructions a client sees on nuget.org are the same ones the repository
+    serves. Packed from the repository root because that is the only copy there is.
+  -->
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 
   <!--
     The host composes the configuration itself: environment variables are read straight

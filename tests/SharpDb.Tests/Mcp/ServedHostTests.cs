@@ -20,7 +20,7 @@ public class ServedHostTests
     public async Task The_host_serves_exactly_the_four_tools()
     {
         using var database = new EmptySqliteDatabase();
-        await using var host = await ServedHost.StartAsync(Sqlite(database));
+        await using var host = await ServedHost.StartAsync(database.Environment());
 
         var names = (await host.Client.ListToolsAsync()).Select(tool => tool.Name).Order().ToArray();
 
@@ -31,7 +31,7 @@ public class ServedHostTests
     public async Task The_host_runs_a_read_only_query_and_answers_with_its_result_set()
     {
         using var database = new EmptySqliteDatabase();
-        await using var host = await ServedHost.StartAsync(Sqlite(database));
+        await using var host = await ServedHost.StartAsync(database.Environment());
 
         var result = await host.Client.CallToolAsync(
             "execute_query",
@@ -47,7 +47,7 @@ public class ServedHostTests
         // The whole refusal path, over the wire: the client is told why rather than being handed a
         // protocol error, which is what lets it correct itself (ADR 0010).
         using var database = new EmptySqliteDatabase();
-        await using var host = await ServedHost.StartAsync(Sqlite(database));
+        await using var host = await ServedHost.StartAsync(database.Environment());
 
         var result = await host.Client.CallToolAsync(
             "execute_query",
@@ -68,7 +68,7 @@ public class ServedHostTests
         // the schema the server publishes is what lets a client send it at all, so a mistake there
         // would leave the documented feature unreachable even though the Tool itself works.
         using var database = new EmptySqliteDatabase();
-        await using var host = await ServedHost.StartAsync(Sqlite(database));
+        await using var host = await ServedHost.StartAsync(database.Environment());
 
         var result = await host.Client.CallToolAsync(
             "execute_query",
@@ -86,7 +86,7 @@ public class ServedHostTests
     public async Task The_host_truncates_a_result_at_the_row_limit_sent_over_the_wire()
     {
         using var database = new EmptySqliteDatabase();
-        await using var host = await ServedHost.StartAsync(Sqlite(database));
+        await using var host = await ServedHost.StartAsync(database.Environment());
 
         var result = await host.Client.CallToolAsync(
             "execute_query",
@@ -99,17 +99,6 @@ public class ServedHostTests
         Assert.NotEqual(true, result.IsError);
         Assert.Equal("""{"columns":["n"],"rows":[[1],[2]],"truncated":true}""", TextOf(result));
     }
-
-    /// <summary>
-    /// The environment that serves the given database over SQLite.
-    /// </summary>
-    /// <param name="database">The database the host is pointed at.</param>
-    /// <returns>The environment the host starts with.</returns>
-    private static Dictionary<string, string?> Sqlite(EmptySqliteDatabase database) => new()
-    {
-        ["SHARPDB__TYPE"] = "sqlite",
-        ["SHARPDB__CONNECTIONSTRING"] = $"Data Source={database.DatabasePath}",
-    };
 
     /// <summary>
     /// The text a call answered with, taken from its first text block.
