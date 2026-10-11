@@ -6,7 +6,7 @@
     never reaches Core (ADR 0004).
   -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
   </ItemGroup>
 
   <ItemGroup>

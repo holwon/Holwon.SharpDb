@@ -360,6 +360,11 @@ ASALocalRun/
 # MSBuild Binary and Structured Log
 *.binlog
 
+# CPM conversion verification artifacts
+*-packages.json
+*-packages-*.json
+convert-to-cpm.md
+
 # NVidia Nsight GPU debugger configuration file
 *.nvuser
 
