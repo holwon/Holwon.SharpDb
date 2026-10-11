@@ -42,7 +42,7 @@
     <RollForward>Major</RollForward>
     <Version>0.1.0</Version>
     <Description>Read-only MCP server that lets an AI agent inspect a relational database and run read-only queries. One install serves MySQL and SQLite; the database type is chosen at startup from the client's environment block.</Description>
-    <PackageTags>mcp;model-context-protocol;database;mysql;sqlite;readonly</PackageTags>
+    <PackageTags>mcp;database;mysql;sqlite;readonly</PackageTags>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/holwon/Holwon.SharpDb.git</RepositoryUrl>
