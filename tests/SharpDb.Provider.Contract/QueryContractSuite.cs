@@ -66,6 +66,64 @@ public abstract class QueryContractSuite(IContractDatabase database)
     }
 
     /// <summary>
+    /// Text outside ASCII is written as itself, not as an escape.
+    /// </summary>
+    /// <remarks>
+    /// A client reads a payload, and a name spelled <c>\u4E2D\u6587</c> has to be decoded in the
+    /// reader's head before it means anything — while a name spelled <c>中文</c> means what it
+    /// says and costs a fraction of the bytes to say it (ADR 0012). The characters here are the ones
+    /// a stricter encoder would escape: text outside ASCII, and the HTML-sensitive characters,
+    /// which are ordinary punctuation in a row and not markup.
+    /// <para>
+    /// The alias is written in Chinese too, because a payload is not only its rows: a column is
+    /// named by the statement as well, and a name that came back escaped would be just as
+    /// unreadable as an escaped value.
+    /// </para>
+    /// <para>
+    /// The text is built by the statement rather than seeded, so this asserts the writing of a
+    /// payload without disturbing the shared schema every other assertion in this suite reads.
+    /// </para>
+    /// </remarks>
+    [SkippableFact]
+    public async Task Text_outside_ascii_is_written_as_itself()
+    {
+        Database.SkipWhenUnavailable();
+
+        var result = await Query().ExecuteQueryAsync(
+            """SELECT '中文' AS 列, '<tag> & "q" + it''s' AS 标""");
+
+        Assert.NotEqual(true, result.IsError);
+        Assert.Equal(
+            """{"columns":["列","标"],"rows":[["中文","<tag> & \"q\" + it's"]]}""",
+            ToolPayload.Text(result));
+    }
+
+    /// <summary>
+    /// A failure names what it could not find as itself.
+    /// </summary>
+    /// <remarks>
+    /// The failure path is a second way a payload reaches the client, and it carries text the
+    /// caller must act on: a name the caller wrote and has to correct. Escaped there, it would be
+    /// hardest to read exactly where reading matters most.
+    /// <para>
+    /// The raw payload is asserted rather than the message read back out of it, because reading it
+    /// back would undo the very thing under test: a JSON reader turns <c>\u4E0D</c> into
+    /// <c>不</c>, so a message that had come back escaped would still read correctly once parsed.
+    /// Only the text as written can tell the two apart.
+    /// </para>
+    /// </remarks>
+    [SkippableFact]
+    public async Task A_failure_names_what_it_could_not_find_as_itself()
+    {
+        Database.SkipWhenUnavailable();
+
+        var result = await Query().ExecuteQueryAsync("SELECT id FROM 不存在");
+
+        Assert.True(result.IsError);
+        Assert.Contains("不存在", ToolPayload.Text(result));
+    }
+
+    /// <summary>
     /// A query that matches nothing still names its columns.
     /// </summary>
     /// <remarks>

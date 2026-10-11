@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Protocol;
@@ -21,10 +22,24 @@ internal static class ToolResults
     /// <summary>
     /// How every Tool's payload is written.
     /// </summary>
+    /// <remarks>
+    /// The encoder is relaxed, so text is written as itself rather than as an escape: a value of
+    /// <c>中文</c> arrives as <c>中文</c>, not as <c>\u4E2D\u6587</c> (ADR 0012). The default
+    /// encoder would spell out every character outside ASCII, and a reader — a person or a model —
+    /// would have to decode it before it meant anything. It also costs the bytes: an escape is
+    /// six characters where the character it stands for is one.
+    /// <para>
+    /// Relaxing the encoder drops the escaping of HTML-sensitive characters, which is the whole
+    /// meaning of the encoder's name. It is safe here only because a payload is read as JSON, never
+    /// as markup: <c>\u003C</c> and <c>&lt;</c> parse to the same string, so the escaping bought
+    /// defence against a threat this seam does not face.
+    /// </para>
+    /// </remarks>
     private static readonly JsonSerializerOptions Serializer = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         // A closed set is named, not numbered: a referential action arrives as "Cascade", so the
         // reader of a payload is told what the action is rather than being left to decode a number.
         Converters = { new JsonStringEnumConverter() },
