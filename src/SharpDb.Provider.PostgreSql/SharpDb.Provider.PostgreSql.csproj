@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The PostgreSQL Provider. It owns its Driver outright: Npgsql is referenced here
+    and nowhere else, so replacing or adding a database type never reaches Core
+    (ADR 0004). Npgsql 9.x rather than 10.x because the repository targets net8.0
+    and Npgsql 10 requires a newer runtime.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpDb.Abstractions\SharpDb.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

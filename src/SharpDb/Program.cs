@@ -8,6 +8,7 @@ using SharpDb.Core.Guard;
 using SharpDb.Core.Mcp;
 using SharpDb.Core.Startup;
 using SharpDb.Provider.MySql;
+using SharpDb.Provider.PostgreSql;
 using SharpDb.Provider.Sqlite;
 
 namespace SharpDb;
@@ -52,7 +53,10 @@ internal static class Program
             var builder = CreateHostBuilder();
 
             var options = SharpDbConfiguration.Read(builder.Configuration);
-            var catalog = new ProviderCatalog(new MySqlDatabaseProvider(), new SqliteDatabaseProvider());
+            var catalog = new ProviderCatalog(
+                new MySqlDatabaseProvider(),
+                new PostgreSqlDatabaseProvider(),
+                new SqliteDatabaseProvider());
             var provider = catalog.Select(options.Type);
 
             // The Provider is registered for the Tool services to resolve, and probed straight
