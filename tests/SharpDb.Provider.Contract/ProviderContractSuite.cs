@@ -15,6 +15,13 @@ namespace SharpDb.Provider.Contract;
 /// Provider and nothing else, and the satisfaction of that promise is this suite passing once per
 /// engine.
 /// <para>
+/// What this suite holds is only the <em>common denominator</em>: an assertion stays here when every
+/// engine answers it identically, and moves to the engine's own project when even one engine's
+/// physical semantics cannot produce it. An assertion kept here that only some engines satisfy
+/// would force every other engine to be written to a lie, so the rule is that the shared suite never
+/// asks a question a Provider cannot answer truthfully.
+/// </para>
+/// <para>
 /// Only what the Provider answers is asserted — which objects are in this database, how a table is
 /// shaped — never the introspection SQL it happens to generate, which stays free to change.
 /// </para>
@@ -261,10 +268,17 @@ public abstract class ProviderContractSuite(IContractDatabase database)
     }
 
     /// <summary>
-    /// A description reports a foreign key's columns, its target and its actions.
+    /// A description reports a foreign key's columns, its target and its delete rule.
     /// </summary>
+    /// <remarks>
+    /// The update rule is deliberately not asserted here. Oracle has no <c>ON UPDATE</c> referential
+    /// action at all — measured, declaring one is <c>ORA-00905</c>, and its catalogue has no column
+    /// for one — so an assertion naming it would be one no Oracle Provider could satisfy. The
+    /// engines that do have it assert it in their own projects, which is where the shared schema's
+    /// rule sends what not every engine can express.
+    /// </remarks>
     [SkippableFact]
-    public async Task DescribeTable_reports_a_foreign_key_with_its_actions()
+    public async Task DescribeTable_reports_a_foreign_key_with_its_delete_rule()
     {
         Database.SkipWhenUnavailable();
 
@@ -277,7 +291,6 @@ public abstract class ProviderContractSuite(IContractDatabase database)
         Assert.Equal("orgs", foreignKey.ReferencedTable);
         Assert.Equal(["id"], foreignKey.ReferencedColumns);
         Assert.Equal(ForeignKeyAction.Cascade, foreignKey.OnDelete);
-        Assert.Equal(ForeignKeyAction.SetNull, foreignKey.OnUpdate);
         Assert.False(string.IsNullOrWhiteSpace(foreignKey.Name));
     }
 

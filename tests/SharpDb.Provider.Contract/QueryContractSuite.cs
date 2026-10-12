@@ -1,5 +1,3 @@
-using System.Text.Json;
-using ModelContextProtocol.Protocol;
 using SharpDb.Core.Mcp;
 
 namespace SharpDb.Provider.Contract;
@@ -13,6 +11,13 @@ namespace SharpDb.Provider.Contract;
 /// the same assertions run against every engine — the JSON of a result set, the marker on a cut
 /// answer, a parameter reaching the database, and a database error surviving to the caller are all
 /// statements about the pair, not about either half.
+/// <para>
+/// What this suite holds is only the <em>common denominator</em>: an assertion stays here when
+/// every engine answers it identically, and moves to the engine's own project when even one
+/// engine's physical semantics cannot produce it — an empty string, a missing <c>FROM</c>, an
+/// object name in an error message, or an <c>EXPLAIN</c> that returns a plan. The shared suite
+/// never asks a question a Provider cannot answer truthfully.
+/// </para>
 /// <para>
 /// Only the outside of a call is asserted: the payload a client receives, and whether the call
 /// came back as an error. Which SQL the Provider ran and which exception a Driver threw are not
@@ -46,9 +51,11 @@ public abstract class QueryContractSuite(IContractDatabase database)
     /// engine must produce it byte for byte, because a client should not have to care which
     /// database answered.
     /// <para>
-    /// The row covers what every engine can hold identically: a whole number, a fraction, text, a
-    /// null, a blob, and the empty string. Types that diverge are exercised in the engine's own
-    /// project.
+    /// The row covers what every engine can hold identically: a whole number, a fraction and text.
+    /// The empty string and the empty blob are deliberately absent, because Oracle stores both as
+    /// NULL — measured, <c>''</c> is NULL there and <c>HEXTORAW('')</c> is too — so an assertion
+    /// naming either could not be shared. The engines that can hold them assert them in their own
+    /// projects, against the same seeded rows.
     /// </para>
     /// </remarks>
     [SkippableFact]
@@ -57,70 +64,12 @@ public abstract class QueryContractSuite(IContractDatabase database)
         Database.SkipWhenUnavailable();
 
         var result = await Query().ExecuteQueryAsync(
-            "SELECT id, label, ratio, payload, note FROM readings ORDER BY id");
+            "SELECT id, label, ratio FROM readings ORDER BY id");
 
         Assert.NotEqual(true, result.IsError);
         Assert.Equal(
-            """{"columns":["id","label","ratio","payload","note"],"rows":[[1,"alpha",1.5,"AQI=",null],[2,"beta",-0.25,"","hello"],[3,"gamma",0,null,""],[4,"delta",2.5,null,"four"],[5,"epsilon",3.5,null,"five"],[6,"zeta",4.5,null,"six"]]}""",
+            """{"columns":["id","label","ratio"],"rows":[[1,"alpha",1.5],[2,"beta",-0.25],[3,"gamma",0],[4,"delta",2.5],[5,"epsilon",3.5],[6,"zeta",4.5]]}""",
             ToolPayload.Text(result));
-    }
-
-    /// <summary>
-    /// Text outside ASCII is written as itself, not as an escape.
-    /// </summary>
-    /// <remarks>
-    /// A client reads a payload, and a name spelled <c>\u4E2D\u6587</c> has to be decoded in the
-    /// reader's head before it means anything — while a name spelled <c>中文</c> means what it
-    /// says and costs a fraction of the bytes to say it (ADR 0012). The characters here are the ones
-    /// a stricter encoder would escape: text outside ASCII, and the HTML-sensitive characters,
-    /// which are ordinary punctuation in a row and not markup.
-    /// <para>
-    /// The alias is written in Chinese too, because a payload is not only its rows: a column is
-    /// named by the statement as well, and a name that came back escaped would be just as
-    /// unreadable as an escaped value.
-    /// </para>
-    /// <para>
-    /// The text is built by the statement rather than seeded, so this asserts the writing of a
-    /// payload without disturbing the shared schema every other assertion in this suite reads.
-    /// </para>
-    /// </remarks>
-    [SkippableFact]
-    public async Task Text_outside_ascii_is_written_as_itself()
-    {
-        Database.SkipWhenUnavailable();
-
-        var result = await Query().ExecuteQueryAsync(
-            """SELECT '中文' AS 列, '<tag> & "q" + it''s' AS 标""");
-
-        Assert.NotEqual(true, result.IsError);
-        Assert.Equal(
-            """{"columns":["列","标"],"rows":[["中文","<tag> & \"q\" + it's"]]}""",
-            ToolPayload.Text(result));
-    }
-
-    /// <summary>
-    /// A failure names what it could not find as itself.
-    /// </summary>
-    /// <remarks>
-    /// The failure path is a second way a payload reaches the client, and it carries text the
-    /// caller must act on: a name the caller wrote and has to correct. Escaped there, it would be
-    /// hardest to read exactly where reading matters most.
-    /// <para>
-    /// The raw payload is asserted rather than the message read back out of it, because reading it
-    /// back would undo the very thing under test: a JSON reader turns <c>\u4E0D</c> into
-    /// <c>不</c>, so a message that had come back escaped would still read correctly once parsed.
-    /// Only the text as written can tell the two apart.
-    /// </para>
-    /// </remarks>
-    [SkippableFact]
-    public async Task A_failure_names_what_it_could_not_find_as_itself()
-    {
-        Database.SkipWhenUnavailable();
-
-        var result = await Query().ExecuteQueryAsync("SELECT id FROM 不存在");
-
-        Assert.True(result.IsError);
-        Assert.Contains("不存在", ToolPayload.Text(result));
     }
 
     /// <summary>
@@ -230,34 +179,6 @@ public abstract class QueryContractSuite(IContractDatabase database)
     }
 
     /// <summary>
-    /// A parameter may be null, and reaches the database as SQL null.
-    /// </summary>
-    /// <remarks>
-    /// The sentinel the comparison falls back to is what tells the two apart: a null that arrived
-    /// as the text <c>"null"</c> would match nothing here.
-    /// <para>
-    /// The aggregate is aliased, which is what lets all three engines answer with the same column
-    /// name. Measured: an unaliased <c>count(*)</c> is labelled <c>count(*)</c> by MySQL and
-    /// SQLite and <c>count</c> by PostgreSQL, so an assertion naming the label would be asserting
-    /// an engine's naming habit rather than the contract. The alias is the caller's own choice of
-    /// name, which every engine honours identically — and honouring the caller's alias is the
-    /// behaviour the contract actually cares about.
-    /// </para>
-    /// </remarks>
-    [SkippableFact]
-    public async Task A_parameter_may_be_null()
-    {
-        Database.SkipWhenUnavailable();
-
-        var result = await Query().ExecuteQueryAsync(
-            "SELECT count(*) AS matching FROM readings WHERE coalesce(note, '<null>') = coalesce(@note, '<null>')",
-            ToolPayload.Parameters(("note", null)));
-
-        Assert.NotEqual(true, result.IsError);
-        Assert.Equal("""{"columns":["matching"],"rows":[[1]]}""", ToolPayload.Text(result));
-    }
-
-    /// <summary>
     /// A whole-number parameter binds as a number.
     /// </summary>
     [SkippableFact]
@@ -286,25 +207,6 @@ public abstract class QueryContractSuite(IContractDatabase database)
 
         Assert.NotEqual(true, result.IsError);
         Assert.Equal("""{"columns":["d"],"rows":[[2]]}""", ToolPayload.Text(result));
-    }
-
-    /// <summary>
-    /// An EXPLAIN runs and answers with a plan.
-    /// </summary>
-    /// <remarks>
-    /// What the plan holds is the engine's business and its column names differ, so the assertion
-    /// is only that a plan came back.
-    /// </remarks>
-    [SkippableFact]
-    public async Task An_explain_of_a_query_answers_with_a_plan()
-    {
-        Database.SkipWhenUnavailable();
-
-        var result = await Query().ExecuteQueryAsync("EXPLAIN SELECT id FROM readings");
-
-        Assert.NotEqual(true, result.IsError);
-        var columns = JsonDocument.Parse(ToolPayload.Text(result)).RootElement.GetProperty("columns");
-        Assert.True(columns.GetArrayLength() > 0);
     }
 
     /// <summary>
