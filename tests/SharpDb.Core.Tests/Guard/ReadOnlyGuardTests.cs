@@ -1,3 +1,4 @@
+using SharpDb.Abstractions;
 using SharpDb.Core.Guard;
 
 namespace SharpDb.Core.Tests.Guard;
@@ -9,9 +10,36 @@ namespace SharpDb.Core.Tests.Guard;
 /// <remarks>
 /// The assertions name the decision and the reason text, never the shape of a syntax tree — the
 /// policy may be reimplemented without touching a single test.
+/// <para>
+/// The Guard is exercised as the service it is, constructed from the policy data a Provider
+/// declares. Most assertions read the policy both shipping engines declare, because those two
+/// must keep behaving exactly as they did; the tests at the end vary the policy itself, which is
+/// where the dialect and the denied-function list are shown to be doing the work.
+/// </para>
 /// </remarks>
 public class ReadOnlyGuardTests
 {
+    /// <summary>
+    /// The Guard under the policy both shipping engines declare.
+    /// </summary>
+    private static readonly ReadOnlyGuard Guard = new(SharedReadOnlyPolicy.Generic);
+
+    /// <summary>
+    /// The Guard under a policy naming PostgreSQL's dialect.
+    /// </summary>
+    /// <remarks>
+    /// Built here rather than taken from the PostgreSQL Provider, so the dialect value itself is
+    /// under test: a policy is data, and this file is where the Guard's use of it is pinned.
+    /// </remarks>
+    private static readonly ReadOnlyGuard PostgreSqlGuard = new(new ReadOnlyPolicy
+    {
+        Dialect = SqlDialect.PostgreSql,
+    });
+
+    /// <summary>
+    /// Every policy in use, so an invariant can be asserted against all of them at once.
+    /// </summary>
+    private static readonly IReadOnlyList<ReadOnlyGuard> Policies = [Guard, PostgreSqlGuard];
     [Theory]
     [InlineData("SELECT 1")]
     [InlineData("SELECT * FROM users")]
@@ -24,7 +52,7 @@ public class ReadOnlyGuardTests
     [InlineData("SELECT * FROM (SELECT id FROM users) AS nested")]
     public void A_read_only_query_is_allowed(string sql)
     {
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = Guard.Inspect(sql);
 
         Assert.True(decision.IsAllowed);
         Assert.Null(decision.Reason);
@@ -39,7 +67,7 @@ public class ReadOnlyGuardTests
     [InlineData("CREATE TABLE t (a INT)", "CreateTable")]
     public void A_write_statement_is_rejected_and_named(string sql, string kind)
     {
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = Guard.Inspect(sql);
 
         Assert.False(decision.IsAllowed);
         Assert.Contains(kind, decision.Reason!);
@@ -48,7 +76,7 @@ public class ReadOnlyGuardTests
     [Fact]
     public void A_rejection_tells_the_client_which_statements_are_permitted()
     {
-        var decision = ReadOnlyGuard.Inspect("DROP TABLE t");
+        var decision = Guard.Inspect("DROP TABLE t");
 
         Assert.Contains("Only SELECT, EXPLAIN and SHOW statements are permitted", decision.Reason!);
     }
@@ -59,7 +87,7 @@ public class ReadOnlyGuardTests
     [InlineData("SELECT 1; INSERT INTO t VALUES (1)")]
     public void Stacked_statements_are_rejected(string sql)
     {
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = Guard.Inspect(sql);
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("only one statement", decision.Reason!, StringComparison.OrdinalIgnoreCase);
@@ -70,7 +98,7 @@ public class ReadOnlyGuardTests
     {
         // The leading comment would defeat any check that looks at the first word, and the
         // statement kind it hides is the one that matters.
-        var decision = ReadOnlyGuard.Inspect("/**/ INSERT INTO t VALUES (1)");
+        var decision = Guard.Inspect("/**/ INSERT INTO t VALUES (1)");
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("Insert", decision.Reason!);
@@ -82,7 +110,7 @@ public class ReadOnlyGuardTests
     [InlineData("\t\n")]
     public void Empty_input_is_rejected(string sql)
     {
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = Guard.Inspect(sql);
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("empty", decision.Reason!, StringComparison.OrdinalIgnoreCase);
@@ -91,7 +119,7 @@ public class ReadOnlyGuardTests
     [Fact]
     public void A_null_statement_is_rejected()
     {
-        Assert.False(ReadOnlyGuard.Inspect(null).IsAllowed);
+        Assert.False(Guard.Inspect(null).IsAllowed);
     }
 
     [Theory]
@@ -100,7 +128,7 @@ public class ReadOnlyGuardTests
     [InlineData("(((")]
     public void Text_that_is_not_a_statement_is_rejected(string sql)
     {
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = Guard.Inspect(sql);
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("could not be parsed", decision.Reason!);
@@ -111,7 +139,7 @@ public class ReadOnlyGuardTests
     {
         // A statement kind outside the write list the parser knows: it is refused because the
         // permit list does not name it, not because anything recognises it as a write.
-        var decision = ReadOnlyGuard.Inspect("GRANT SELECT ON t TO u");
+        var decision = Guard.Inspect("GRANT SELECT ON t TO u");
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("Grant", decision.Reason!);
@@ -124,7 +152,7 @@ public class ReadOnlyGuardTests
     [InlineData("EXPLAIN QUERY PLAN SELECT 1")]
     public void Explaining_a_read_only_query_is_allowed(string sql)
     {
-        Assert.True(ReadOnlyGuard.Inspect(sql).IsAllowed);
+        Assert.True(Guard.Inspect(sql).IsAllowed);
     }
 
     [Theory]
@@ -136,7 +164,7 @@ public class ReadOnlyGuardTests
     {
         // The statement behind EXPLAIN is classified as if it stood alone, so borrowing EXPLAIN
         // to run a write does not get the write past the Guard.
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = Guard.Inspect(sql);
 
         Assert.False(decision.IsAllowed);
         Assert.Contains(kind, decision.Reason!);
@@ -150,10 +178,10 @@ public class ReadOnlyGuardTests
     {
         // ANALYZE runs the statement it explains, so EXPLAIN ANALYZE is only permitted when what
         // it explains is itself permitted.
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = Guard.Inspect(sql);
 
         Assert.False(decision.IsAllowed);
-        Assert.Contains("Insert", ReadOnlyGuard.Inspect("EXPLAIN ANALYZE INSERT INTO t VALUES (1)").Reason!);
+        Assert.Contains("Insert", Guard.Inspect("EXPLAIN ANALYZE INSERT INTO t VALUES (1)").Reason!);
     }
 
     [Theory]
@@ -163,7 +191,7 @@ public class ReadOnlyGuardTests
     {
         // ANALYZE here runs a SELECT, which is permitted, so the deadline-free spelling question
         // does not arise: the inner statement decides, and both spellings agree.
-        Assert.True(ReadOnlyGuard.Inspect(sql).IsAllowed);
+        Assert.True(Guard.Inspect(sql).IsAllowed);
     }
 
     [Theory]
@@ -174,7 +202,7 @@ public class ReadOnlyGuardTests
     {
         // The parser models a bare `EXPLAIN t` as a different statement from `EXPLAIN SELECT`,
         // and it carries no inner statement to inspect, so it is not in the permit list.
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = Guard.Inspect(sql);
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("ExplainTable", decision.Reason!);
@@ -192,7 +220,7 @@ public class ReadOnlyGuardTests
     [InlineData("SHOW ENGINES")]
     public void Showing_server_state_is_allowed(string sql)
     {
-        Assert.True(ReadOnlyGuard.Inspect(sql).IsAllowed);
+        Assert.True(Guard.Inspect(sql).IsAllowed);
     }
 
     [Fact]
@@ -200,7 +228,7 @@ public class ReadOnlyGuardTests
     {
         // The permit list is what allows, so a kind nobody thought about falls to the refusal
         // side. This is the direction a mistake must point: a refusal is recoverable, a write is not.
-        var decision = ReadOnlyGuard.Inspect("SET @x = 1");
+        var decision = Guard.Inspect("SET @x = 1");
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("SetVariable", decision.Reason!);
@@ -211,7 +239,7 @@ public class ReadOnlyGuardTests
     {
         // The parser calls this a SELECT, and the write sits in the query body. Trusting the
         // statement's type would let it through, so the body is what is inspected.
-        var decision = ReadOnlyGuard.Inspect("WITH x AS (INSERT INTO t VALUES (1) RETURNING a) SELECT * FROM x");
+        var decision = Guard.Inspect("WITH x AS (INSERT INTO t VALUES (1) RETURNING a) SELECT * FROM x");
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("Insert", decision.Reason!);
@@ -220,7 +248,7 @@ public class ReadOnlyGuardTests
     [Fact]
     public void A_write_nested_two_common_table_expressions_deep_is_rejected()
     {
-        var decision = ReadOnlyGuard.Inspect(
+        var decision = Guard.Inspect(
             "WITH x AS (WITH y AS (INSERT INTO t VALUES (1) RETURNING a) SELECT * FROM y) SELECT * FROM x");
 
         Assert.False(decision.IsAllowed);
@@ -235,13 +263,13 @@ public class ReadOnlyGuardTests
     {
         // A recursive definition refers to itself, so the walk has to cope with meeting a node
         // twice rather than following it forever.
-        Assert.True(ReadOnlyGuard.Inspect(sql).IsAllowed);
+        Assert.True(Guard.Inspect(sql).IsAllowed);
     }
 
     [Fact]
     public void Select_into_is_rejected_because_it_creates_a_table()
     {
-        var decision = ReadOnlyGuard.Inspect("SELECT * INTO newtable FROM t");
+        var decision = Guard.Inspect("SELECT * INTO newtable FROM t");
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("SELECT INTO", decision.Reason!);
@@ -252,7 +280,7 @@ public class ReadOnlyGuardTests
     {
         // The INTO clause sits on an operand of the union rather than on the outer body, so the
         // walk has to reach into both sides.
-        var decision = ReadOnlyGuard.Inspect("SELECT * INTO newtable FROM t UNION SELECT 1");
+        var decision = Guard.Inspect("SELECT * INTO newtable FROM t UNION SELECT 1");
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("SELECT INTO", decision.Reason!);
@@ -265,7 +293,7 @@ public class ReadOnlyGuardTests
     {
         // The statement still reads, but it asks the engine to hold locks while it does, which a
         // read-only server has no business doing.
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = Guard.Inspect(sql);
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("locking", decision.Reason!, StringComparison.OrdinalIgnoreCase);
@@ -282,7 +310,7 @@ public class ReadOnlyGuardTests
     {
         // These are written as ordinary calls inside a query the parser is right to call a
         // SELECT, so they are caught by what they call rather than by their statement kind.
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = Guard.Inspect(sql);
 
         Assert.False(decision.IsAllowed);
         Assert.Contains(function, decision.Reason!, StringComparison.OrdinalIgnoreCase);
@@ -297,7 +325,7 @@ public class ReadOnlyGuardTests
     {
         // A denied call is not always the outermost one, and the parser's own walk stops at a
         // call's arguments, so the arguments are walked here.
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = Guard.Inspect(sql);
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("LOAD_FILE", decision.Reason!);
@@ -310,7 +338,7 @@ public class ReadOnlyGuardTests
     [InlineData("SELECT * FROM t WHERE id IN (SELECT id FROM u WHERE GET_LOCK('l', 1))")]
     public void A_denied_call_is_found_wherever_it_sits_in_the_statement(string sql)
     {
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = Guard.Inspect(sql);
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("not allowed", decision.Reason!);
@@ -328,7 +356,7 @@ public class ReadOnlyGuardTests
         // Reading the text for write keywords would turn these away, and they are ordinary
         // queries against ordinary schemas: created_at, updated_at and deleted_at are column
         // names, and a write keyword inside a string or a comment is not a write.
-        Assert.True(ReadOnlyGuard.Inspect(sql).IsAllowed);
+        Assert.True(Guard.Inspect(sql).IsAllowed);
     }
 
     [Theory]
@@ -347,7 +375,7 @@ public class ReadOnlyGuardTests
         //
         // The bound-parameter spelling matters too: it is what lets a provider pass a table name
         // without string interpolation.
-        Assert.True(ReadOnlyGuard.Inspect(sql).IsAllowed);
+        Assert.True(Guard.Inspect(sql).IsAllowed);
     }
 
     [Theory]
@@ -365,7 +393,7 @@ public class ReadOnlyGuardTests
         //
         // Refusing it also guards the assignment spelling, which is how a client would reach the
         // engine's write-ish settings, such as turning `query_only` back off.
-        Assert.False(ReadOnlyGuard.Inspect(sql).IsAllowed);
+        Assert.False(Guard.Inspect(sql).IsAllowed);
     }
 
     [Fact]
@@ -374,7 +402,7 @@ public class ReadOnlyGuardTests
         // The parser reads the bracketed argument as a value, so the form SQLite documentation
         // usually shows — a bare identifier, `PRAGMA table_info(users)` — is a syntax error. The
         // quoted spelling parses and is refused by policy instead. Either way the answer is no.
-        var decision = ReadOnlyGuard.Inspect("PRAGMA table_info(users)");
+        var decision = Guard.Inspect("PRAGMA table_info(users)");
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("could not be parsed", decision.Reason!);
@@ -385,7 +413,7 @@ public class ReadOnlyGuardTests
     {
         // `VALUES (1)` is a query body the permit list does not name, so it is refused rather than
         // falling through a walk that only knows how to permit a SELECT.
-        var decision = ReadOnlyGuard.Inspect("VALUES (1)");
+        var decision = Guard.Inspect("VALUES (1)");
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("ValuesExpression", decision.Reason!);
@@ -397,9 +425,126 @@ public class ReadOnlyGuardTests
         // The generic dialect does not accept SQLite's [bracketed] identifiers, so SQL written
         // that way is turned away. Brackets are the SQL Server style and are rare in SQLite, which
         // is why the gap is accepted rather than worked around (ADR 0005).
-        var decision = ReadOnlyGuard.Inspect("SELECT * FROM [my table]");
+        var decision = Guard.Inspect("SELECT * FROM [my table]");
 
         Assert.False(decision.IsAllowed);
         Assert.Contains("could not be parsed", decision.Reason!);
+    }
+
+    /// <summary>
+    /// A back-quoted identifier is allowed under the policy MySQL declares.
+    /// </summary>
+    /// <remarks>
+    /// This is the assertion that locks MySQL in place while the dialect becomes a declaration
+    /// rather than a constant: measured, the PostgreSQL dialect does <em>not</em> accept
+    /// back-quoted identifiers, so a Guard that read every engine's SQL with one dialect chosen
+    /// for PostgreSQL would start refusing SQL MySQL users write today.
+    /// </remarks>
+    [Theory]
+    [InlineData("SELECT `id` FROM `users`")]
+    [InlineData("SELECT `order` FROM `group` WHERE `key` = 1")]
+    public void Back_quoted_identifiers_stay_allowed_under_the_policy_mysql_declares(string sql)
+    {
+        Assert.True(new ReadOnlyGuard(SharedReadOnlyPolicy.Generic).Inspect(sql).IsAllowed);
+    }
+
+    /// <summary>
+    /// A dialect the policy names is the dialect the statement is read with.
+    /// </summary>
+    /// <remarks>
+    /// <c>count(*) FILTER (WHERE …)</c> is ordinary PostgreSQL that the generic dialect cannot
+    /// parse and the PostgreSQL dialect can. Asserting both directions at once is what shows the
+    /// dialect value reaching the parser rather than being carried around unused — and it is the
+    /// one measured difference between the two dialects, so it is the one place the choice is
+    /// observable from outside.
+    /// </remarks>
+    [Fact]
+    public void The_dialect_a_policy_names_is_the_one_the_statement_is_read_with()
+    {
+        const string filteredAggregate = "SELECT count(*) FILTER (WHERE ratio > 1) FROM readings";
+
+        Assert.True(PostgreSqlGuard.Inspect(filteredAggregate).IsAllowed);
+
+        var underGeneric = Guard.Inspect(filteredAggregate);
+
+        Assert.False(underGeneric.IsAllowed);
+        Assert.Contains("could not be parsed", underGeneric.Reason!);
+    }
+
+    /// <summary>
+    /// A function the policy denies is refused, and one it does not deny is not.
+    /// </summary>
+    /// <remarks>
+    /// The PostgreSQL Provider's list is written out here rather than borrowed from it, because
+    /// what is under test is the Guard's use of the list: a name in it is refused, and a name
+    /// outside it is judged on the statement alone. <c>lower</c> is the control — an ordinary
+    /// function that no policy denies, so a Guard that refused everything would fail this too.
+    /// </remarks>
+    [Theory]
+    [InlineData("SELECT pg_read_file('/etc/passwd')")]
+    [InlineData("SELECT pg_read_binary_file('/etc/passwd')")]
+    [InlineData("SELECT pg_ls_dir('/var/lib/postgresql')")]
+    [InlineData("SELECT lo_import('/etc/passwd')")]
+    [InlineData("SELECT pg_stat_file('/etc/passwd')")]
+    [InlineData("SELECT upper(pg_read_file('/etc/passwd'))")]
+    [InlineData("SELECT 1 FROM readings WHERE pg_read_file('/x') IS NOT NULL")]
+    public void A_function_the_policy_denies_is_refused_wherever_it_appears(string sql)
+    {
+        var pg = new ReadOnlyGuard(new ReadOnlyPolicy
+        {
+            Dialect = SqlDialect.PostgreSql,
+            DeniedFunctions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "pg_read_file",
+                "pg_read_binary_file",
+                "pg_ls_dir",
+                "lo_import",
+                "pg_stat_file",
+            },
+        });
+
+        var decision = pg.Inspect(sql);
+
+        Assert.False(decision.IsAllowed);
+        Assert.Contains("is not allowed", decision.Reason!);
+    }
+
+    /// <summary>
+    /// A function the policy does not deny is left to the permit list.
+    /// </summary>
+    /// <remarks>
+    /// The denied list is a net, not the policy: a read-only query that calls an ordinary function
+    /// must still be permitted, or the net would have swallowed the permit list.
+    /// </remarks>
+    [Fact]
+    public void A_function_outside_the_denied_list_is_still_judged_on_its_statement()
+    {
+        Assert.True(PostgreSqlGuard.Inspect("SELECT lower(label) FROM readings").IsAllowed);
+        Assert.True(PostgreSqlGuard.Inspect("SELECT count(*), max(ratio) FROM readings").IsAllowed);
+    }
+
+    /// <summary>
+    /// Every write form is refused under every policy in use.
+    /// </summary>
+    /// <remarks>
+    /// This is the invariant the policy data must not be able to break: a dialect changes which
+    /// read-only statements are understood, and this asserts it changes nothing about writes.
+    /// It is asserted across all policies at once so a policy added later is covered the moment it
+    /// is added to the list rather than when somebody remembers to write another test.
+    /// </remarks>
+    [Theory]
+    [InlineData("INSERT INTO t VALUES (1)")]
+    [InlineData("UPDATE t SET a = 1")]
+    [InlineData("DELETE FROM t")]
+    [InlineData("DROP TABLE t")]
+    [InlineData("TRUNCATE TABLE t")]
+    [InlineData("CREATE TABLE t (a INT)")]
+    [InlineData("WITH x AS (INSERT INTO t VALUES (1) RETURNING a) SELECT * FROM x")]
+    [InlineData("SELECT * INTO newtable FROM t")]
+    [InlineData("EXPLAIN ANALYZE INSERT INTO t VALUES (1)")]
+    [InlineData("SELECT 1; DROP TABLE users")]
+    public void Every_write_form_is_refused_under_every_policy(string sql)
+    {
+        Assert.All(Policies, policy => Assert.False(policy.Inspect(sql).IsAllowed));
     }
 }

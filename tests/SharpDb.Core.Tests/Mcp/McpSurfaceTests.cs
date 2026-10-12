@@ -7,6 +7,7 @@ using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using SharpDb.Abstractions;
 using SharpDb.Core.Configuration;
+using SharpDb.Core.Guard;
 using SharpDb.Core.Mcp;
 
 namespace SharpDb.Core.Tests.Mcp;
@@ -240,6 +241,7 @@ public class McpSurfaceTests
                 Type = "stub",
                 ConnectionString = "stub",
             });
+            builder.Services.AddSingleton(new ReadOnlyGuard(SharedReadOnlyPolicy.Generic));
 
             // The pipe carries the client's words one way and the server's the other; each stream
             // is read at one end and written at the other, so the two are crossed deliberately.

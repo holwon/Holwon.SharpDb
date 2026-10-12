@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SharpDb.Abstractions;
 using SharpDb.Core.Configuration;
+using SharpDb.Core.Guard;
 using SharpDb.Core.Mcp;
 using SharpDb.Core.Startup;
 using SharpDb.Provider.MySql;
@@ -58,6 +59,11 @@ internal static class Program
             // from the local: the probe must not depend on the container, or a wiring mistake
             // would escape startup as a stack trace instead of a reason (ADR 0003).
             builder.Services.AddSingleton(provider);
+
+            // The Guard is built from the selected Provider's policy, so the dialect and the
+            // denied functions in force are the ones the engine's own declaration names — and the
+            // Guard itself stays one algorithm in Core rather than one per database type.
+            builder.Services.AddSingleton(new ReadOnlyGuard(provider.Policy));
 
             // The options carry the limits and the timeout every query is run with, so the Tools
             // resolve them rather than reading the environment a second time.

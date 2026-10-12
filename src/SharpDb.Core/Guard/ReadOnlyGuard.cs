@@ -1,3 +1,4 @@
+using SharpDb.Abstractions;
 using SqlParser;
 using SqlParser.Ast;
 using SqlParser.Dialects;
@@ -18,13 +19,21 @@ namespace SharpDb.Core.Guard;
 /// a read-only query being turned away, never as a write reaching the database.
 /// </para>
 /// <para>
-/// Parsing is done with the generic dialect (ADR 0005). The parser classifies statements by
-/// grammar, not by their leading word, which is what makes the disguises below visible: a
-/// comment before <c>INSERT</c>, a write keyword carried inside a <c>WITH</c> clause, and a
-/// second statement stacked after the first.
+/// The algorithm is one algorithm for every database type; what varies per engine is the
+/// <see cref="ReadOnlyPolicy"/> it is constructed with, which carries the dialect the statement is
+/// read under and the function names that must not be called. Measured across the two dialects in
+/// use, 43 statements — every write form among them — classify identically, so a policy changes
+/// which read-only statements are <em>understood</em>, never which writes are let past (ADR 0005).
+/// </para>
+/// <para>
+/// Parsing is what makes the disguises below visible, because the parser classifies statements by
+/// grammar rather than by their leading word: a comment before <c>INSERT</c>, a write keyword
+/// carried inside a <c>WITH</c> clause, and a second statement stacked after the first are all
+/// found by reading the statement, not by matching its text.
 /// </para>
 /// </remarks>
-public static class ReadOnlyGuard
+/// <param name="policy">The read-only policy the engine under this process declares.</param>
+public sealed class ReadOnlyGuard(ReadOnlyPolicy policy)
 {
     /// <summary>
     /// The sentence every refusal ends with, so the client is told what it may send instead.
@@ -36,18 +45,17 @@ public static class ReadOnlyGuard
     /// </summary>
     /// <remarks>
     /// These are escape hatches rather than statement kinds: they are written as ordinary calls
-    /// inside a query the parser is right to call a <c>SELECT</c>. The list is deliberately short
-    /// and holds only functions with no read-only meaning; it is a permit-list net, not a policy
-    /// of its own, and the engine layer still stands behind it.
+    /// inside a query the parser is right to call a <c>SELECT</c>. The set is the Provider's
+    /// contribution — deliberately short, holding only functions with no read-only meaning — and
+    /// it is a net inside the permit list rather than a policy of its own; the engine layer still
+    /// stands behind it.
     /// </remarks>
-    private static readonly HashSet<string> DeniedFunctions =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            "LOAD_FILE", // MySQL: reads a file from the server host
-            "GET_LOCK",  // MySQL: takes a named advisory lock
-            "SLEEP",     // MySQL: blocks the server for a while
-            "BENCHMARK", // MySQL: burns server CPU for a while
-        };
+    private readonly IReadOnlySet<string> _deniedFunctions = policy.DeniedFunctions;
+
+    /// <summary>
+    /// The dialect every statement is read under.
+    /// </summary>
+    private readonly Dialect _dialect = DialectFor(policy.Dialect);
 
     /// <summary>
     /// Decides whether a statement may run.
@@ -59,7 +67,7 @@ public static class ReadOnlyGuard
     /// cannot read is one it cannot vouch for, and the engine layer would only reach it after the
     /// fact.
     /// </remarks>
-    public static ReadOnlyDecision Inspect(string? sql)
+    public ReadOnlyDecision Inspect(string? sql)
     {
         if (string.IsNullOrWhiteSpace(sql))
         {
@@ -69,7 +77,7 @@ public static class ReadOnlyGuard
         Sequence<Statement> statements;
         try
         {
-            statements = new SqlQueryParser().Parse(sql, new GenericDialect());
+            statements = new SqlQueryParser().Parse(sql, _dialect);
         }
         catch (Exception)
         {
@@ -92,7 +100,7 @@ public static class ReadOnlyGuard
     /// </summary>
     /// <param name="statement">The statement to classify.</param>
     /// <returns>The decision.</returns>
-    private static ReadOnlyDecision Classify(Statement statement)
+    private ReadOnlyDecision Classify(Statement statement)
     {
         // Checked before the statement kind, because a denied call is an escape hatch inside a
         // statement that is otherwise permitted — a SELECT, or the SELECT an EXPLAIN explains.
@@ -150,7 +158,7 @@ public static class ReadOnlyGuard
     /// means exactly the same thing to the engine. Classifying the inner statement instead does
     /// not care how the <c>EXPLAIN</c> was spelled.
     /// </remarks>
-    private static ReadOnlyDecision InspectExplain(Statement.Explain explain) =>
+    private ReadOnlyDecision InspectExplain(Statement.Explain explain) =>
         Classify(explain.Statement);
 
     /// <summary>
@@ -251,12 +259,35 @@ public static class ReadOnlyGuard
     /// </summary>
     /// <param name="statement">The statement to search.</param>
     /// <returns>The name of the offending function, or <see langword="null"/> when there is none.</returns>
-    private static string? FindDeniedFunction(Statement statement)
+    private string? FindDeniedFunction(Statement statement)
     {
-        var walker = new FunctionWalker();
+        var walker = new FunctionWalker(_deniedFunctions);
         ((IElement)statement).Visit(walker);
         return walker.DeniedFunction;
     }
+
+    /// <summary>
+    /// Translates a declared dialect into the parser's own.
+    /// </summary>
+    /// <param name="dialect">The dialect the policy named.</param>
+    /// <returns>The parser dialect statements are read with.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The value is not one this Guard knows.</exception>
+    /// <remarks>
+    /// This is the one place a dialect value meets the parser, and it lives in Core because Core is
+    /// the only project that references the parser at all (ADR 0005 as amended). An unknown value
+    /// is a defect here rather than a question about the caller — nothing outside this repository
+    /// constructs a <see cref="ReadOnlyPolicy"/> — so it fails loudly instead of falling back to a
+    /// dialect nobody chose.
+    /// </remarks>
+    private static Dialect DialectFor(SqlDialect dialect) => dialect switch
+    {
+        SqlDialect.Generic => new GenericDialect(),
+        SqlDialect.PostgreSql => new PostgreSqlDialect(),
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(dialect),
+            dialect,
+            "The Guard has no parser dialect for this value."),
+    };
 
     /// <summary>
     /// Walks a statement's expressions looking for a denied function call.
@@ -266,7 +297,8 @@ public static class ReadOnlyGuard
     /// a call nested inside another call — <c>CONCAT('x', LOAD_FILE(...))</c> — is walked here by
     /// hand. Stopping at the first hit keeps the cost proportional to how early it is found.
     /// </remarks>
-    private sealed class FunctionWalker : Visitor
+    /// <param name="deniedFunctions">The names the engine's policy refuses.</param>
+    private sealed class FunctionWalker(IReadOnlySet<string> deniedFunctions) : Visitor
     {
         /// <summary>
         /// The name of the offending function, once one is found.
@@ -309,8 +341,8 @@ public static class ReadOnlyGuard
         /// <c>main.load_file</c> is recognised. The parser hands back the name with its quoting
         /// resolved, so a quoted spelling cannot slip past.
         /// </remarks>
-        private static bool IsDenied(ObjectName name) =>
-            name.Values.Count > 0 && DeniedFunctions.Contains(name.Values[^1].Value);
+        private bool IsDenied(ObjectName name) =>
+            name.Values.Count > 0 && deniedFunctions.Contains(name.Values[^1].Value);
 
         /// <summary>
         /// The child elements of a call's argument list.

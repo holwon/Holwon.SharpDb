@@ -24,6 +24,25 @@ public interface IDatabaseProvider
     string Type { get; }
 
     /// <summary>
+    /// What this engine contributes to the read-only Guard.
+    /// </summary>
+    /// <value>
+    /// The dialect the engine's statements are read under, and the function names a read-only
+    /// statement must not call on it.
+    /// </value>
+    /// <remarks>
+    /// The Guard's algorithm is Core's and is the same for every engine; this is the data that
+    /// differs, handed over by the one party that knows the engine. It carries no parser: the
+    /// dialect is a value, and the mapping to a parser dialect lives in Core (ADR 0005 as amended).
+    /// <para>
+    /// A policy may only add denied function names. Nothing here can widen what is permitted,
+    /// because the permit list is Core's own and a Provider that could relax it would turn one
+    /// central guarantee into a per-implementation one.
+    /// </para>
+    /// </remarks>
+    ReadOnlyPolicy Policy { get; }
+
+    /// <summary>
     /// Opens a connection that is already in the engine's own read-only mode.
     /// </summary>
     /// <param name="connectionString">The connection string to reach the database with.</param>

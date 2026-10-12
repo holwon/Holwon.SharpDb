@@ -121,6 +121,14 @@ public sealed class MySqlDatabaseProvider : IDatabaseProvider
 
     /// <inheritdoc/>
     /// <remarks>
+    /// The generic dialect, deliberately: measured, the PostgreSQL dialect does not accept
+    /// back-quoted identifiers, which MySQL SQL is written with. The denied functions are the four
+    /// that were refused before a policy existed, so declaring them changes nothing.
+    /// </remarks>
+    public ReadOnlyPolicy Policy => SharedReadOnlyPolicy.Generic;
+
+    /// <inheritdoc/>
+    /// <remarks>
     /// Read-only cannot ride along in the connection string here, so the session is switched to
     /// read-only immediately after connecting and before the connection is handed out — the mode
     /// is in force before a single statement runs (ADR 0002, layer 2).

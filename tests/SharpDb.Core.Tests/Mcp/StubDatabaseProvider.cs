@@ -67,6 +67,13 @@ internal sealed class StubDatabaseProvider : IDatabaseProvider
     public string Type => "stub";
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// The shared generic policy: the double answers no database, and the Guard under test is the
+    /// real one, so it is given the same data the two production engines declare.
+    /// </remarks>
+    public ReadOnlyPolicy Policy => SharedReadOnlyPolicy.Generic;
+
+    /// <inheritdoc/>
     public Task<DbConnection> CreateReadOnlyConnectionAsync(
         string connectionString,
         CancellationToken cancellationToken)

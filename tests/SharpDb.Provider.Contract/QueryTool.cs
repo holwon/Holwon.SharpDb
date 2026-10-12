@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using SharpDb.Abstractions;
 using SharpDb.Core.Configuration;
+using SharpDb.Core.Guard;
 using SharpDb.Core.Mcp;
 
 namespace SharpDb.Provider.Contract;
@@ -61,5 +62,6 @@ public static class QueryTool
             MaxRows = maxRows,
             TimeoutSeconds = timeoutSeconds,
         },
+        new ReadOnlyGuard(provider.Policy),
         NullLogger<QueryTools>.Instance);
 }

@@ -134,6 +134,14 @@ public sealed class SqliteDatabaseProvider : IDatabaseProvider
 
     /// <inheritdoc/>
     /// <remarks>
+    /// The generic dialect, which is what this engine's SQL has always been read with: it accepts
+    /// double-quoted identifiers, and it refuses SQLite's <c>[bracketed]</c> form, an accepted gap
+    /// (ADR 0005).
+    /// </remarks>
+    public ReadOnlyPolicy Policy => SharedReadOnlyPolicy.Generic;
+
+    /// <inheritdoc/>
+    /// <remarks>
     /// Read-only is expressed in the connection string itself, so the engine opens the file
     /// read-only and the mode is in force before a single statement runs (ADR 0002, layer 2).
     /// </remarks>

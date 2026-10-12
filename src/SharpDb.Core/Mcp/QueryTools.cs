@@ -25,12 +25,17 @@ namespace SharpDb.Core.Mcp;
 /// </remarks>
 /// <param name="provider">The Provider serving the database this process is bound to.</param>
 /// <param name="options">The configuration read at startup, which carries the limits and the timeout.</param>
+/// <param name="guard">The read-only Guard, built from the selected Provider's policy.</param>
 /// <param name="logger">Where the statement and any failure are recorded.</param>
 /// <exception cref="InvalidOperationException">
 /// The configuration carries no connection string, which means the Tools were wired ahead of the
 /// startup check that guarantees one (ADR 0007).
 /// </exception>
-public sealed class QueryTools(IDatabaseProvider provider, SharpDbOptions options, ILogger<QueryTools> logger)
+public sealed class QueryTools(
+    IDatabaseProvider provider,
+    SharpDbOptions options,
+    ReadOnlyGuard guard,
+    ILogger<QueryTools> logger)
 {
     /// <summary>
     /// The connection string every call connects with, proven present when the Tools were built.
@@ -65,7 +70,7 @@ public sealed class QueryTools(IDatabaseProvider provider, SharpDbOptions option
         int? maxRows = null,
         CancellationToken cancellationToken = default)
     {
-        var decision = ReadOnlyGuard.Inspect(sql);
+        var decision = guard.Inspect(sql);
         if (!decision.IsAllowed)
         {
             return Failed(decision.Reason!);
