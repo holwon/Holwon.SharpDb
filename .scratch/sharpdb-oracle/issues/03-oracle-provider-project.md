@@ -26,6 +26,7 @@
 - 只读时序按票实现：`BeginTransaction()` → `SET TRANSACTION READ ONLY` → `BindByName = true`，事务不提交。事务对象用 Driver 的**同步** `connection.BeginTransaction()`（返回 `OracleTransaction`）——异步版返回基类 `DbTransaction`，而 `OracleCommand.Transaction` 要 `OracleTransaction`，编译不过。
 - **几处与票面实现的偏离，均由真库实测强制（`b341145`）：**
   - **`ListTablesAsync` 改用单读 `ALL_TAB_COMMENTS`**，不是票写的 `ALL_TABLES UNION ALL ALL_VIEWS`。实测 `ALL_TABLES`/`ALL_VIEWS` **都没有 comment 列**（`ORA-00904`），票面的 union 无法带注释；`ALL_TAB_COMMENTS` 一次给出名、类型（`TABLE_TYPE`）与注释。
+  - **主键索引的排除改用字典自己的判据**：票面写 `UNIQUENESS = 'UNIQUE'` 且名字以 `_PK` 结尾或匹配主键约束名，实现改为 JOIN `ALL_CONSTRAINTS.INDEX_NAME`——主键约束在字典里直接记着自己背后的索引名，比按名字猜可靠（Oracle 命名索引时未必带 `_PK`，未命名约束更是随便给名）。
   - **`BindByName` 显式设在每个命令上**（`CommandFor`）：同一语句里 `:name` 出现多次时位置绑定直接 `ORA-00936`；单次出现则静默错值。光设连接属性不够稳。
   - **`InitialLONGFetchSize = -1`**：`DATA_DEFAULT` 是 `LONG` 列，ODP.NET 默认 fetch size 为 0 会把它读成空——票只说"不能放进函数"，漏了"必须开 fetch size"。
   - **bind 变量名 `:table_name` 而非 `:table`**：`TABLE` 是保留字，`:table` 直接 `ORA-01745`。

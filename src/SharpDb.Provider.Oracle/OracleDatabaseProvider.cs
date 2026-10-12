@@ -62,7 +62,6 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
         SELECT table_name, table_type, comments
         FROM all_tab_comments
         WHERE owner = USER
-        ORDER BY table_name
         """;
 
     /// <summary>
@@ -75,10 +74,9 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
     /// the listing exists to convey.
     /// </remarks>
     private const string ListDatabasesSql = """
-        SELECT DISTINCT owner FROM all_tab_comments
+        SELECT owner FROM all_tab_comments
         UNION
         SELECT USER FROM dual
-        ORDER BY 1
         """;
 
     /// <summary>
@@ -276,8 +274,9 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
             tables.Add(new TableInfo(NormalizedName(reader.GetString(0)), type, CommentAt(reader, 2)));
         }
 
-        // Ordered here rather than by the statement, because the names are lower-cased on the way
-        // out and the catalogue's order is the upper-case one.
+        // Ordered here rather than by the statement, because the order a caller reads is the order
+        // of the lower-cased names, and the catalogue can only sort by the upper-case spelling it
+        // stores. Sorting in SQL and again here would leave the first order unused.
         return tables.OrderBy(table => table.Name, StringComparer.Ordinal).ToArray();
     }
 
@@ -321,6 +320,11 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
             databases.Add(NormalizedName(reader.GetString(0)));
         }
 
+        // The same ordering decision as the table listing: reported names are lower-cased, so the
+        // sort happens after normalisation rather than in SQL. The distinct likewise belongs here
+        // rather than in the statement, because two catalogue spellings of one name — an unquoted
+        // USERS and a quoted "users" — collapse to the same reported name, which the union, working
+        // on the stored names, cannot see.
         return databases
             .Distinct(StringComparer.Ordinal)
             .OrderBy(name => name, StringComparer.Ordinal)
