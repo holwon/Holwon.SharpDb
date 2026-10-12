@@ -21,7 +21,7 @@ Installing needs the .NET 8 SDK or newer. Running needs only a runtime — .NET 
 dotnet tool install --global Holwon.SharpDb.Mcp
 ```
 
-This puts `sharpdb-mcp` on your `PATH`. The package carries both database types, so you install once.
+This puts `sharpdb-mcp` on your `PATH`. The package carries every database type, so you install once.
 
 ## Configure
 
@@ -63,9 +63,43 @@ Add a server entry to your MCP client's configuration — in `.vscode/mcp.json` 
 }
 ```
 
+**PostgreSQL**
+
+```json
+{
+  "servers": {
+    "sharpdb-postgres": {
+      "type": "stdio",
+      "command": "sharpdb-mcp",
+      "args": [],
+      "env": {
+        "SHARPDB__TYPE": "postgresql",
+        "SHARPDB__CONNECTIONSTRING": "Host=localhost;Port=5432;Database=app;Username=sharpdb_ro;Password=CHANGE_ME"
+      }
+    }
+  }
+}
+```
+
+The connection string is an ordinary Npgsql one, so an existing one can be pasted in as it stands. Read-only is added by the server, not by the string: write the string you would give any Npgsql client, and SharpDb puts the session in the engine's read-only mode before it hands the connection to anything.
+
 The `command` is the command the install put on your `PATH`, and `args` stays empty: everything that varies lives in the `env` block, so nothing about the server needs editing when the database changes.
 
 The key names use a **double** underscore. That is the .NET configuration system's hierarchy separator; a single underscore spells a different variable, which the server silently does not read.
+
+### What each type supports
+
+| Type | Driver | Notes |
+|---|---|---|
+| `mysql` | MySqlConnector | — |
+| `postgresql` | Npgsql | PostgreSQL 10 or later. Tested against 16; there is no multi-version test matrix. |
+| `sqlite` | Microsoft.Data.Sqlite | — |
+
+PostgreSQL's introspection reads `attidentity`, which is why 10 is the floor. The connection string needs no read-only parameter: what a session is put into is the server's business.
+
+### What a description reports about a view
+
+`describe_table` answers with the columns the catalogue holds, and what a view's columns report differs by engine: MySQL propagates the base table's `NOT NULL` and defaults into the view's columns, while PostgreSQL and SQLite report neither. Read a view's `isNullable` and `defaultValue` as "what the catalogue says" rather than as "what the column behind it is".
 
 ## More than one database
 
@@ -104,7 +138,7 @@ Every value comes from the `env` block. There is no configuration file to look f
 
 | Key | Required | Default | Meaning |
 |---|---|---|---|
-| `SHARPDB__TYPE` | yes | — | `mysql` or `sqlite`. |
+| `SHARPDB__TYPE` | yes | — | `mysql`, `postgresql` or `sqlite`. The comparison ignores case and surrounding spaces. |
 | `SHARPDB__CONNECTIONSTRING` | yes | — | Passed through to the Driver that serves this database type. |
 | `SHARPDB__DEFAULTMAXROWS` | no | `100` | Rows returned when a query does not ask for a number. |
 | `SHARPDB__MAXROWS` | no | `1000` | The ceiling a query cannot raise, only be cut down to. |
@@ -115,7 +149,7 @@ Every value comes from the `env` block. There is no configuration file to look f
 Nothing writes to your database, and that is enforced in three places rather than one.
 
 1. **The Guard.** Every statement the agent sends is parsed before it runs. Only `SELECT`, `EXPLAIN` and `SHOW` are allowed; anything else is refused before it reaches the database, and the refusal tells the agent what it may use instead.
-2. **The engine's own read-only mode.** MySQL connections are opened with the session set read-only; SQLite files are opened read-only. A statement the Guard somehow let through would still be refused by the database.
+2. **The engine's own read-only mode.** MySQL connections are opened with the session set read-only, PostgreSQL sessions are put in the engine's transaction-read-only mode, and SQLite files are opened read-only. A statement the Guard somehow let through would still be refused by the database.
 3. **The database account.** This is the boundary that actually holds.
 
 ### The account is the real boundary
@@ -159,8 +193,8 @@ SharpDb opens one connection while starting and **exits immediately** if anythin
 
 | What you see | What it means |
 |---|---|
-| `sharpdb: SHARPDB__TYPE is required (expected "mysql" or "sqlite").` | The `env` block is missing the type, or spells it with a single underscore. |
-| `sharpdb: SHARPDB__TYPE 'postgres' is unknown (expected "mysql" or "sqlite").` | A type was given that no database type serves. |
+| `sharpdb: SHARPDB__TYPE is required (expected "mysql" or "postgresql" or "sqlite").` | The `env` block is missing the type, or spells it with a single underscore. |
+| `sharpdb: SHARPDB__TYPE 'postgres' is unknown (expected "mysql" or "postgresql" or "sqlite").` | A type was given that no database type serves. `postgres` is not an alias; the type is spelled `postgresql`. |
 | `sharpdb: SHARPDB__CONNECTIONSTRING is required and must not be blank.` | The connection string is missing or empty. |
 | `sharpdb: Could not connect to the mysql database: …` | The server could not connect — usually credentials, host or database name. |
 | `sharpdb: Invalid configuration: Failed to convert configuration value 'plenty' at 'SHARPDB:MaxRows' to type 'System.Int32'.` | A row limit or the timeout is not a number. |

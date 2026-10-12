@@ -13,20 +13,22 @@
 #   pwsh -File tools/verify-installed-tool.ps1
 #
 # Switches:
-#   -SkipMySql    verify SQLite only, without asking for Docker at all. Use this to say "I am not
+#   -SkipMySql    verify without asking for Docker at all. Use this to say "I am not
 #                 verifying MySQL today"; it is the only way MySQL is skipped.
+#   -SkipPostgreSql  the same for PostgreSQL.
 #   -LogLevel X   also print the stderr the tool produced at that level.
 #
-# MySQL is verified whenever Docker is present: Docker being there but unable to produce a container
-# is a FAILURE, not a skip. "Silently not running" is the one outcome a verification harness must
-# never produce, because it turns a broken environment into a green run.
+# MySQL and PostgreSQL are verified whenever Docker is present: Docker being there but unable to
+# produce a container is a FAILURE, not a skip. "Silently not running" is the one outcome a
+# verification harness must never produce, because it turns a broken environment into a green run.
 #
 # Exit code 0 when every check passed, 1 otherwise.
 
 [CmdletBinding()]
 param(
     [string] $LogLevel = '',
-    [switch] $SkipMySql
+    [switch] $SkipMySql,
+    [switch] $SkipPostgreSql
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,7 +41,9 @@ if (-not $shim) {
 $workspace = Join-Path $PWD 'artifacts'
 New-Item -ItemType Directory -Force -Path $workspace | Out-Null
 $containerName = 'sharpdb-verify-mysql'
+$postgresContainerName = 'sharpdb-verify-postgresql'
 $provisionedContainer = $false
+$provisionedPostgres = $false
 
 $failures = 0
 function Assert-That {
@@ -207,6 +211,45 @@ if (-not $SkipMySql) {
     }
 }
 
+if (-not $SkipPostgreSql) {
+    $docker = Get-Command docker -ErrorAction SilentlyContinue
+    if (-not $docker) {
+        Write-Host 'PostgreSQL is NOT verified: Docker is not installed.'
+    }
+    else {
+        Write-Host 'Starting a throwaway PostgreSQL container...'
+
+        $runOutput = docker run -d --name $postgresContainerName `
+            -e POSTGRES_PASSWORD=rootpass -e POSTGRES_DB=app -p 15432:5432 postgres:16 2>&1
+        $runExitCode = $LASTEXITCODE
+        if ($runExitCode -ne 0) {
+            throw "Docker could not start the PostgreSQL container. PostgreSQL was NOT verified: $runOutput"
+        }
+
+        $provisionedPostgres = $true
+        $ready = $false
+        $deadline = (Get-Date).AddSeconds(180)
+        while (-not $ready -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 3
+            docker exec $postgresContainerName pg_isready -U postgres 2>&1 | Out-Null
+            $ready = $LASTEXITCODE -eq 0
+        }
+        if (-not $ready) { throw 'The PostgreSQL container did not become ready within 180 seconds.' }
+
+        # Seeding needs DDL, so the fixture is built with the superuser; the tool is then pointed at
+        # a SELECT-only account, which is what the README tells a user to create.
+        $seedSql = (Resolve-Path (Join-Path $PWD 'tools/seed-verification-postgresql.sql')).Path
+        $seedOutput = Get-Content $seedSql -Raw | docker exec -i $postgresContainerName psql -U postgres -d app 2>&1
+        $seedExitCode = $LASTEXITCODE
+        if ($seedExitCode -ne 0) {
+            throw "Seeding PostgreSQL failed: $seedOutput"
+        }
+
+        $PostgreSqlConnectionString = 'Host=127.0.0.1;Port=15432;Database=app;Username=sharpdb_ro;' +
+            'Password=a-strong-password'
+    }
+}
+
 # --- Drive one engine through the installed tool ------------------------------
 # Each engine gets its own process, because a process is bound to one database: that is also the
 # README's "more than one database means more than one server entry", exercised rather than quoted.
@@ -292,12 +335,12 @@ function Test-StartupFailures {
 
     $cases = @(
         @{
-            Documented = 'sharpdb: SHARPDB__TYPE is required (expected "mysql" or "sqlite").'
+            Documented = 'sharpdb: SHARPDB__TYPE is required (expected "mysql" or "postgresql" or "sqlite").'
             Because    = 'the type is missing'
             Env        = @{ SHARPDB__CONNECTIONSTRING = 'Data Source=unused.db' }
         },
         @{
-            Documented = 'sharpdb: SHARPDB__TYPE ''postgres'' is unknown (expected "mysql" or "sqlite").'
+            Documented = 'sharpdb: SHARPDB__TYPE ''postgres'' is unknown (expected "mysql" or "postgresql" or "sqlite").'
             Because    = 'the type is unknown'
             Env        = @{ SHARPDB__TYPE = 'postgres'; SHARPDB__CONNECTIONSTRING = 'Data Source=unused.db' }
         },
@@ -347,6 +390,9 @@ $engines = [ordered]@{ sqlite = "Data Source=$sqlitePath" }
 if ($MySqlConnectionString) {
     $engines['mysql'] = $MySqlConnectionString
 }
+if ($PostgreSqlConnectionString) {
+    $engines['postgresql'] = $PostgreSqlConnectionString
+}
 
 try {
     Write-Host "Shim: $shim"
@@ -363,9 +409,12 @@ try {
     Test-StartupFailures
 }
 finally {
-    # The container is the harness's own fixture, so it goes however the run ended.
+    # The containers are the harness's own fixtures, so they go however the run ended.
     if ($provisionedContainer) {
         docker rm -f $containerName 2>&1 | Out-Null
+    }
+    if ($provisionedPostgres) {
+        docker rm -f $postgresContainerName 2>&1 | Out-Null
     }
 }
 

@@ -17,9 +17,9 @@
     client's configuration names `sharpdb-mcp` directly, so the database type is
     chosen at runtime rather than by choosing a package.
 
-    PackAsTool publishes the project and packs that output, which is how both
-    Providers travel inside this one package: the user gets MySQL and SQLite from
-    a single install and is not asked to know which one they need.
+    PackAsTool publishes the project and packs that output, which is how every
+    Provider travels inside this one package: the user gets MySQL, PostgreSQL and
+    SQLite from a single install and is not asked to know which one they need.
 
     PackageId and ToolCommandName are published contracts. Changing either breaks
     every configuration that already names them (ADR 0009).
@@ -41,8 +41,8 @@
     <ToolCommandName>sharpdb-mcp</ToolCommandName>
     <RollForward>Major</RollForward>
     <Version>0.1.1</Version>
-    <Description>Read-only MCP server that lets an AI agent inspect a relational database and run read-only queries. One install serves MySQL and SQLite; the database type is chosen at startup from the client's environment block.</Description>
-    <PackageTags>mcp;database;mysql;sqlite;readonly</PackageTags>
+    <Description>Read-only MCP server that lets an AI agent inspect a relational database and run read-only queries. One install serves MySQL, PostgreSQL and SQLite; the database type is chosen at startup from the client's environment block.</Description>
+    <PackageTags>mcp;database;mysql;postgresql;sqlite;readonly</PackageTags>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/holwon/Holwon.SharpDb.git</RepositoryUrl>
