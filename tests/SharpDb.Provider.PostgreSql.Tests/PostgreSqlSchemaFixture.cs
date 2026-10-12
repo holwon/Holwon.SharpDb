@@ -61,7 +61,10 @@ internal sealed class PostgreSqlSchemaFixture(PostgreSqlContractDatabase databas
 
         await using var command = connection.CreateCommand();
         command.CommandText = """
+            DROP VIEW IF EXISTS commented_view;
             DROP VIEW IF EXISTS serial_view;
+            DROP TABLE IF EXISTS commented;
+            DROP TABLE IF EXISTS indexed;
             DROP TABLE IF EXISTS serial_members;
             DROP TABLE IF EXISTS serial_users;
             DROP TABLE IF EXISTS serial_orgs;
@@ -96,6 +99,29 @@ internal sealed class PostgreSqlSchemaFixture(PostgreSqlContractDatabase databas
 
             CREATE VIEW serial_view AS
                 SELECT id, required_not_null, nullable_but_defaulted FROM labelled;
+
+            CREATE TABLE commented (
+                id SERIAL,
+                documented VARCHAR(50),
+                undocumented VARCHAR(50),
+                PRIMARY KEY (id)
+            );
+            COMMENT ON TABLE commented IS 'A table the catalogue describes';
+            COMMENT ON COLUMN commented.documented IS 'A column with a comment';
+
+            CREATE VIEW commented_view AS SELECT id, documented FROM commented;
+            COMMENT ON VIEW commented_view IS 'A view the catalogue describes';
+
+            CREATE TABLE indexed (
+                id SERIAL,
+                role VARCHAR(50) NOT NULL,
+                org_id INT,
+                PRIMARY KEY (id)
+            );
+            CREATE INDEX idx_indexed_role ON indexed(role);
+            CREATE UNIQUE INDEX idx_indexed_role_unique ON indexed(role, org_id);
+            CREATE INDEX idx_indexed_lower_role ON indexed(lower(role));
+            CREATE INDEX idx_indexed_mixed ON indexed(lower(role), org_id);
             """;
         await command.ExecuteNonQueryAsync();
     }

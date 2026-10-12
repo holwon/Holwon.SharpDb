@@ -269,6 +269,148 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     }
 
     /// <summary>
+    /// A table's and a column's comments reach the client, and an uncommented one reports none.
+    /// </summary>
+    /// <remarks>
+    /// Comments are the one part of the Schema model that PostgreSQL keeps in a place of its own —
+    /// <c>pg_description</c>, read back through <c>obj_description</c> and <c>col_description</c> —
+    /// so they are asserted here rather than in the shared suite, which keeps its schema free of
+    /// them because MySQL reports a view's comment as the literal word <c>VIEW</c> and SQLite
+    /// keeps none at all.
+    /// </remarks>
+    [SkippableFact]
+    public async Task DescribeTable_reports_table_and_column_comments()
+    {
+        database.SkipWhenUnavailable();
+        await SeedAsync();
+
+        await using var connection = await OpenSpareAsync();
+        var schema = await _database.Provider.DescribeTableAsync(connection, "commented", CancellationToken.None);
+
+        Assert.NotNull(schema);
+        Assert.Equal("A table the catalogue describes", schema.Comment);
+        Assert.Equal(
+            "A column with a comment",
+            schema.Columns.Single(column => column.Name == "documented").Comment);
+        Assert.Null(schema.Columns.Single(column => column.Name == "undocumented").Comment);
+    }
+
+    /// <summary>
+    /// A view's comment reaches the client.
+    /// </summary>
+    /// <remarks>
+    /// A view's comment is stored the same way a table's is on this engine, unlike MySQL where a
+    /// view has no comment clause at all and the server answers with the word <c>VIEW</c>.
+    /// </remarks>
+    [SkippableFact]
+    public async Task DescribeTable_reports_a_views_comment()
+    {
+        database.SkipWhenUnavailable();
+        await SeedAsync();
+
+        await using var connection = await OpenSpareAsync();
+        var schema = await _database.Provider.DescribeTableAsync(connection, "commented_view", CancellationToken.None);
+
+        Assert.NotNull(schema);
+        Assert.Equal(TableType.View, schema.Type);
+        Assert.Equal("A view the catalogue describes", schema.Comment);
+    }
+
+    /// <summary>
+    /// The listing reports a table's comment as well as a description does.
+    /// </summary>
+    [SkippableFact]
+    public async Task ListTables_reports_a_tables_comment()
+    {
+        database.SkipWhenUnavailable();
+        await SeedAsync();
+
+        await using var connection = await OpenSpareAsync();
+        var listed = await _database.Provider.ListTablesAsync(connection, CancellationToken.None);
+        var commented = listed.Single(table => table.Name == "commented");
+
+        Assert.Equal("A table the catalogue describes", commented.Comment);
+        Assert.Null(listed.Single(table => table.Name == "indexed").Comment);
+    }
+
+    /// <summary>
+    /// An index of nothing but expressions is reported with no columns.
+    /// </summary>
+    /// <remarks>
+    /// An indexed expression has no name, which the catalogue records as an attribute number of
+    /// zero that matches no column. The Provider drops it, so the index arrives with an empty list
+    /// — the same answer MySQL and SQLite give, and the reason this stays out of the shared suite:
+    /// each engine reaches it differently and the shared schema declares no expression index.
+    /// </remarks>
+    [SkippableFact]
+    public async Task DescribeTable_reports_an_expression_index_with_no_columns()
+    {
+        database.SkipWhenUnavailable();
+        await SeedAsync();
+
+        await using var connection = await OpenSpareAsync();
+        var schema = await _database.Provider.DescribeTableAsync(connection, "indexed", CancellationToken.None);
+
+        Assert.NotNull(schema);
+        var expressionIndex = schema.Indexes.Single(index => index.Name == "idx_indexed_lower_role");
+
+        Assert.Empty(expressionIndex.Columns);
+        Assert.False(expressionIndex.IsUnique);
+    }
+
+    /// <summary>
+    /// An index whose columns mix expressions with real columns keeps the columns it has.
+    /// </summary>
+    /// <remarks>
+    /// The expression is dropped and the column is kept, in position, so the list holds what a
+    /// caller can act on rather than a gap where the expression was.
+    /// </remarks>
+    [SkippableFact]
+    public async Task DescribeTable_keeps_the_named_columns_of_a_mixed_index()
+    {
+        database.SkipWhenUnavailable();
+        await SeedAsync();
+
+        await using var connection = await OpenSpareAsync();
+        var schema = await _database.Provider.DescribeTableAsync(connection, "indexed", CancellationToken.None);
+
+        Assert.NotNull(schema);
+        var mixed = schema.Indexes.Single(index => index.Name == "idx_indexed_mixed");
+
+        Assert.Equal(["org_id"], mixed.Columns);
+    }
+
+    /// <summary>
+    /// Every index is reported with its columns and its uniqueness, and the primary key's is not.
+    /// </summary>
+    /// <remarks>
+    /// The shared suite asserts the same shape against the shared schema; this asserts it against
+    /// a table whose keys and indexes are named the way PostgreSQL spells them, and pins that the
+    /// index behind <c>indexed_pkey</c> is absent — PostgreSQL names that index after the table
+    /// rather than after a convention, so a Provider that filtered by name would list it.
+    /// </remarks>
+    [SkippableFact]
+    public async Task DescribeTable_lists_indexes_without_the_one_backing_the_primary_key()
+    {
+        database.SkipWhenUnavailable();
+        await SeedAsync();
+
+        await using var connection = await OpenSpareAsync();
+        var schema = await _database.Provider.DescribeTableAsync(connection, "indexed", CancellationToken.None);
+
+        Assert.NotNull(schema);
+        Assert.Equal(["id"], schema.PrimaryKey);
+        Assert.Equal(
+            [
+                ("idx_indexed_lower_role", false, Array.Empty<string>()),
+                ("idx_indexed_mixed", false, new[] { "org_id" }),
+                ("idx_indexed_role", false, new[] { "role" }),
+                ("idx_indexed_role_unique", true, new[] { "role", "org_id" }),
+            ],
+            schema.Indexes.Select(index => (index.Name, index.IsUnique, index.Columns.ToArray())));
+    }
+
+    /// <summary>
     /// Creates this project's engine-specific tables once.
     /// </summary>
     /// <returns>A task that completes when the tables exist.</returns>
