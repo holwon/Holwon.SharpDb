@@ -7,7 +7,7 @@ namespace SharpDb.Provider.Sqlite.Tests;
 /// engine answers it the same way.
 /// </summary>
 /// <remarks>
-/// Everything both engines agree on lives in <c>SharpDb.Provider.Contract</c> and is asserted there
+/// Everything every engine agrees on lives in <c>SharpDb.Provider.Contract</c> and is asserted there
 /// once, for both. What remains here is SQLite's own behaviour: the bookkeeping objects the engine
 /// creates for itself, the <c>LIKE</c> wildcard inside a filter, a name a caller cased differently,
 /// and an empty database.

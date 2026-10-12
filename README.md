@@ -11,7 +11,7 @@ SharpDb runs as a local subprocess of your MCP client and speaks the Model Conte
 | `execute_query` | The rows a read-only SQL statement returns. |
 | `list_databases` | Which databases the connection can see. Informational only. |
 
-One install serves both **MySQL** and **SQLite**. Which one a process serves is decided at startup from its environment, not by installing a different package — so moving between databases never means reinstalling.
+One install serves **MySQL**, **PostgreSQL** and **SQLite**. Which one a process serves is decided at startup from its environment, not by installing a different package — so moving between databases never means reinstalling.
 
 ## Install
 

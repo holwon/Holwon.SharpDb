@@ -10,7 +10,7 @@ namespace SharpDb.Provider.Contract;
 /// </summary>
 /// <remarks>
 /// The Tool is Core's, but what it produces depends on the connection the Provider hands it, so
-/// the same assertions run against both engines — the JSON of a result set, the marker on a cut
+/// the same assertions run against every engine — the JSON of a result set, the marker on a cut
 /// answer, a parameter reaching the database, and a database error surviving to the caller are all
 /// statements about the pair, not about either half.
 /// <para>
@@ -42,11 +42,11 @@ public abstract class QueryContractSuite(IContractDatabase database)
     /// </summary>
     /// <remarks>
     /// The exact JSON is asserted, not a shape resembling it: the envelope is the whole point of
-    /// the design — each column is named once and a row is a list in column order — and both
-    /// engines must produce it byte for byte, because a client should not have to care which
+    /// the design — each column is named once and a row is a list in column order — and every
+    /// engine must produce it byte for byte, because a client should not have to care which
     /// database answered.
     /// <para>
-    /// The row covers what both engines can hold identically: a whole number, a fraction, text, a
+    /// The row covers what every engine can hold identically: a whole number, a fraction, text, a
     /// null, a blob, and the empty string. Types that diverge are exercised in the engine's own
     /// project.
     /// </para>
@@ -435,12 +435,12 @@ public abstract class QueryContractSuite(IContractDatabase database)
     /// </summary>
     /// <remarks>
     /// ADR 0010 keeps two things out of every message a caller reads: the connection string's
-    /// credentials, and file paths. Each engine supplies the value it can vouch for — MySQL its
-    /// password, SQLite its database file's directory — and neither message carries it today,
-    /// measured. So this assertion is a tripwire rather than a reproduction: it fires if a Driver
-    /// or a server version starts including what a reader must never receive. That is the most a
-    /// test can do where the message cannot be provoked to contain the value in the first place,
-    /// and it runs on both engines, which is what the ticket's redaction rule asks for.
+    /// credentials, and file paths. Each engine supplies the value it can vouch for — MySQL and
+    /// PostgreSQL their passwords, SQLite its database file's directory — and no message carries it
+    /// today, measured. So this assertion is a tripwire rather than a reproduction: it fires if a
+    /// Driver or a server version starts including what a reader must never receive. That is the
+    /// most a test can do where the message cannot be provoked to contain the value in the first
+    /// place, and it runs on every engine, which is what the ticket's redaction rule asks for.
     /// </remarks>
     [SkippableFact]
     public async Task An_error_message_discloses_nothing_sensitive()

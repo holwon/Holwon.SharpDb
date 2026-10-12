@@ -8,13 +8,14 @@ namespace SharpDb.Provider.Contract;
 /// </summary>
 /// <remarks>
 /// Each engine's test project supplies an implementation of its own — SQLite through a temporary
-/// file, MySQL through a container — so the same assertions run against both and the port is
-/// verified as one contract rather than two implementations that merely resemble each other.
+/// file, MySQL and PostgreSQL through containers — so the same assertions run against every engine
+/// and the port is verified as one contract rather than three implementations that merely resemble
+/// one another.
 /// </remarks>
 public interface IContractDatabase
 {
     /// <summary>
-    /// The identifier the engine is known by, such as <c>mysql</c> or <c>sqlite</c>.
+    /// The identifier the engine is known by, such as <c>mysql</c>, <c>postgresql</c> or <c>sqlite</c>.
     /// </summary>
     /// <value>
     /// The value the Provider's own <see cref="IDatabaseProvider.Type"/> must equal.

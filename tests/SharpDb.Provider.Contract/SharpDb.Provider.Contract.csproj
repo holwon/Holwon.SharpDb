@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    The Provider contract as executable assertions, written once and run by both engines'
+    The Provider contract as executable assertions, written once and run by every engine's
     test projects (ADR 0003: one deep port, verified the same way against every Provider).
     A library rather than a test project: it holds no runnable tests of its own, only the
     abstract suites each engine subclasses, so it carries the xunit attributes without a

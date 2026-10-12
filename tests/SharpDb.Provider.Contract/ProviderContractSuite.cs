@@ -10,10 +10,10 @@ namespace SharpDb.Provider.Contract;
 /// </summary>
 /// <remarks>
 /// This suite is abstract and lives in its own assembly; each engine's test project subclasses it
-/// once, handing over its own <see cref="IContractDatabase"/>. The two runs are the same
-/// assertions, which is what makes the port a contract — ADR 0003 promises that a new database
-/// type is a new Provider and nothing else, and the satisfaction of that promise is this suite
-/// passing twice.
+/// once, handing over its own <see cref="IContractDatabase"/>. The runs are the same assertions,
+/// which is what makes the port a contract — ADR 0003 promises that a new database type is a new
+/// Provider and nothing else, and the satisfaction of that promise is this suite passing once per
+/// engine.
 /// <para>
 /// Only what the Provider answers is asserted — which objects are in this database, how a table is
 /// shaped — never the introspection SQL it happens to generate, which stays free to change.
@@ -85,9 +85,9 @@ public abstract class ProviderContractSuite(IContractDatabase database)
     /// <remarks>
     /// Read-only is asserted by trying to write rather than by inspecting the connection string:
     /// the string is how the mode is asked for, while a refused write is the mode actually being in
-    /// force. The refusal must be the engine's — either Driver reports it by throwing its own
-    /// exception, both of which derive from <see cref="System.Data.Common.DbException"/>, and this
-    /// is the tightest type the two engines share.
+    /// force. The refusal must be the engine's — every Driver reports it by throwing its own
+    /// exception, all of which derive from <see cref="System.Data.Common.DbException"/>, and this
+    /// is the tightest type the engines share.
     /// </remarks>
     [SkippableFact]
     public async Task The_connection_a_provider_opens_refuses_a_write()
@@ -160,7 +160,7 @@ public abstract class ProviderContractSuite(IContractDatabase database)
     /// The database listing arrives ordered and without repeats.
     /// </summary>
     /// <remarks>
-    /// The comparison is ordinal, which is the same answer both engines give only because every
+    /// The comparison is ordinal, which is the same answer every engine gives only because every
     /// name that can appear here is lower-case — the fixture's own databases and the server's own
     /// schemas alike. SQLite orders names under its case-sensitive <c>BINARY</c> collation while
     /// MySQL's default collation is case-insensitive, so the two genuinely disagree about a
@@ -183,7 +183,7 @@ public abstract class ProviderContractSuite(IContractDatabase database)
     /// A description reports the columns in declaration order, with their ordinal and nullability.
     /// </summary>
     /// <remarks>
-    /// The shared schema's <c>users</c> is written so that both engines answer identically: a
+    /// The shared schema's <c>users</c> is written so that every engine answers identically: a
     /// single-column auto-increment key, a nullable foreign key column, a nullable column and a
     /// required one — and no defaults, which is where the engines diverge.
     /// </remarks>
@@ -325,7 +325,7 @@ public abstract class ProviderContractSuite(IContractDatabase database)
     /// The index listing names each index, its columns and whether it is unique.
     /// </summary>
     /// <remarks>
-    /// The order the two engines report indexes in is alphabetical — SQLite sorts by name itself,
+    /// The order the engines report indexes in is alphabetical — SQLite sorts by name itself,
     /// MySQL's <c>STATISTICS</c> is ordered by name here too — and the shared schema relies on
     /// that, so the assertion may name the expected sequence rather than a set.
     /// </remarks>

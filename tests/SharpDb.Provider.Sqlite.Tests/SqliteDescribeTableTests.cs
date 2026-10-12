@@ -8,7 +8,7 @@ namespace SharpDb.Provider.Sqlite.Tests;
 /// no other engine answers it the same way.
 /// </summary>
 /// <remarks>
-/// Everything both engines agree on — column order and ordinals, the primary key, a foreign key's
+/// Everything every engine agrees on — column order and ordinals, the primary key, a foreign key's
 /// columns and actions, an index's columns and uniqueness, a view, a name that matches nothing —
 /// lives in <c>SharpDb.Provider.Contract</c> and is asserted there once, for both. What remains
 /// here is what only SQLite does: a declared type that may be empty, autoincrement computed from

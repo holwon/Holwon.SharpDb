@@ -45,7 +45,8 @@ public sealed class ProviderCatalog
     /// The accepted database types, quoted and joined for a failure message.
     /// </summary>
     /// <value>
-    /// A phrase such as <c>"mysql" or "sqlite"</c>.
+    /// A phrase such as <c>"mysql" or "postgresql" or "sqlite"</c>, built from the Providers the
+    /// host was assembled with rather than written down here.
     /// </value>
     public string ExpectedTypes { get; }
 

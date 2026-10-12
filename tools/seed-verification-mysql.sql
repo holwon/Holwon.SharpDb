@@ -1,7 +1,7 @@
 -- The MySQL fixture `tools/verify-installed-tool.ps1` seeds before pointing the installed tool at
 -- a container. It builds the same shape as the SQLite fixture in tools/seed-verification-database.cs
 -- (a table with a primary key, a second with a foreign key and a covering index, a view, two rows)
--- so the two engines answer the harness's identical assertions.
+-- so every engine answers the harness's identical assertions.
 --
 -- The account at the end is the README's own recipe, verbatim: SELECT and nothing else. The tool is
 -- only ever pointed at that account, so a write the Guard somehow let through would still be refused.

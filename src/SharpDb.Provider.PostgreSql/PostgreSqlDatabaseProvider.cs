@@ -217,7 +217,7 @@ public sealed class PostgreSqlDatabaseProvider : IDatabaseProvider
     /// A column of an index may be an expression rather than a column, and an expression has no
     /// name: <c>attnum</c> is zero for it, no catalogue row matches, and the name comes back null.
     /// It is dropped, so an index of nothing but expressions arrives with no columns — the same
-    /// answer the other two engines give.
+    /// answer the other engines give.
     /// </para>
     /// </remarks>
     private const string DescribeIndexesSql = """
