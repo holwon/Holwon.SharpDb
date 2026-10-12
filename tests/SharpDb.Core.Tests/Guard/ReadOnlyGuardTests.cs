@@ -37,9 +37,23 @@ public class ReadOnlyGuardTests
     });
 
     /// <summary>
+    /// The Guard under a policy naming Oracle's dialect.
+    /// </summary>
+    /// <remarks>
+    /// Built here rather than taken from the Oracle Provider, for the same reason as the PostgreSQL
+    /// one: the dialect value itself is under test. Oracle is read with the generic dialect, so the
+    /// assertion is that declaring Oracle changes nothing about what is permitted — the value earns
+    /// its place by selecting the placeholder rewrite, not by widening the permit list.
+    /// </remarks>
+    private static readonly ReadOnlyGuard OracleGuard = new(new ReadOnlyPolicy
+    {
+        Dialect = SqlDialect.Oracle,
+    });
+
+    /// <summary>
     /// Every policy in use, so an invariant can be asserted against all of them at once.
     /// </summary>
-    private static readonly IReadOnlyList<ReadOnlyGuard> Policies = [Guard, PostgreSqlGuard];
+    private static readonly IReadOnlyList<ReadOnlyGuard> Policies = [Guard, PostgreSqlGuard, OracleGuard];
     [Theory]
     [InlineData("SELECT 1")]
     [InlineData("SELECT * FROM users")]
@@ -521,6 +535,26 @@ public class ReadOnlyGuardTests
     {
         Assert.True(PostgreSqlGuard.Inspect("SELECT lower(label) FROM readings").IsAllowed);
         Assert.True(PostgreSqlGuard.Inspect("SELECT count(*), max(ratio) FROM readings").IsAllowed);
+    }
+
+    /// <summary>
+    /// A read-only query is allowed under the policy Oracle declares.
+    /// </summary>
+    /// <remarks>
+    /// Oracle declares its own dialect value, and that value must not narrow what the permit list
+    /// allows. The statements are the ordinary read-only SQL an Oracle user writes — a
+    /// <c>dual</c> query, a parameterised lookup, a <c>ROWNUM</c> bound — and all of them are
+    /// understood, which is what makes the placeholder rewrite the only thing Oracle's declaration
+    /// changes.
+    /// </remarks>
+    [Theory]
+    [InlineData("SELECT 1 FROM dual")]
+    [InlineData("SELECT id, name FROM users WHERE id = @id")]
+    [InlineData("SELECT * FROM readings WHERE ROWNUM <= 10")]
+    [InlineData("SELECT count(*) AS n FROM users")]
+    public void A_read_only_query_is_allowed_under_the_policy_oracle_declares(string sql)
+    {
+        Assert.True(OracleGuard.Inspect(sql).IsAllowed);
     }
 
     /// <summary>

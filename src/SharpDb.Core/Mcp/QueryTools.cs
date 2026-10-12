@@ -91,6 +91,12 @@ public sealed class QueryTools(
 
         var rowLimit = RowLimitFor(maxRows);
 
+        // The statement is rewritten for the engine that spells a placeholder differently, and only
+        // that: Oracle wants `:name` where every other engine in use wants `@name`. Both checks
+        // above read the statement as the caller wrote it — the Guard classifies it and the
+        // placeholder scan names a missing value — so only what is handed to the Driver changes.
+        var statement = PlaceholderTranslation.ForDialect(sql, provider.Policy.Dialect);
+
         // The statement is recorded and the values are not: the statement is what explains a
         // failure later, while the values are row data that has no business in a log.
         logger.LogInformation("Running read-only statement: {Statement}", sql);
@@ -104,7 +110,7 @@ public sealed class QueryTools(
 
             var result = await QueryExecutor.ExecuteAsync(
                 connection,
-                sql,
+                statement,
                 bindings,
                 rowLimit,
                 options.TimeoutSeconds,

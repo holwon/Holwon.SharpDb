@@ -1,7 +1,10 @@
+using System.Text;
+
 namespace SharpDb.Core.Execution;
 
 /// <summary>
-/// Finds the <c>@name</c> placeholders in a statement that the caller supplied no value for.
+/// Reads the <c>@name</c> placeholders out of a statement: which names the caller supplied no value
+/// for, and how to respell each one's marker for an engine that expects another.
 /// </summary>
 /// <remarks>
 /// A forgotten value is the likeliest mistake a caller makes, and it must not be answered as
@@ -16,6 +19,8 @@ namespace SharpDb.Core.Execution;
 /// The scan is lexical rather than a search of the raw text, because the text is not the statement:
 /// <c>SELECT '@id'</c> holds an <c>@id</c> that is data, and a comment holds one that is prose.
 /// Neither is a placeholder, and reporting either would refuse a statement for saying the word.
+/// The same scan answers where each placeholder sits, which is what lets the marker be respelled
+/// without touching a <c>@</c> that is data or prose (see <see cref="WithMarker"/>).
 /// </para>
 /// </remarks>
 public static class ParameterPlaceholders
@@ -44,11 +49,11 @@ public static class ParameterPlaceholders
             ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(supplied.Keys, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var name in Names(sql))
+        foreach (var found in Spans(sql))
         {
-            if (!names.Contains(name))
+            if (!names.Contains(found.Name))
             {
-                return name;
+                return found.Name;
             }
         }
 
@@ -56,11 +61,53 @@ public static class ParameterPlaceholders
     }
 
     /// <summary>
-    /// Reads the placeholder names out of a statement's text.
+    /// Respells every placeholder's marker, leaving the name and every other character alone.
+    /// </summary>
+    /// <param name="sql">The statement's text, as the caller wrote it.</param>
+    /// <param name="marker">The character to put where the <c>@</c> was.</param>
+    /// <returns>The statement with each placeholder's marker replaced.</returns>
+    /// <exception cref="ArgumentNullException">The statement is <see langword="null"/>.</exception>
+    /// <remarks>
+    /// Only a real placeholder's marker is replaced: a <c>@</c> inside a string, a quoted
+    /// identifier or a comment is data or prose and stays where it is, because the scan that finds
+    /// the placeholders skips those runs. A statement with no placeholder comes back unchanged.
+    /// <para>
+    /// This is the one engine-specific rewrite the server performs, and it lives here so it reuses
+    /// the scan rather than re-deriving what a placeholder is: the caller writes <c>@name</c>
+    /// whichever engine answers, and the engine that spells it otherwise is given its own spelling.
+    /// </para>
+    /// </remarks>
+    public static string WithMarker(string sql, char marker)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+
+        var found = Spans(sql).ToList();
+        if (found.Count == 0)
+        {
+            return sql;
+        }
+
+        var rewritten = new StringBuilder(sql.Length);
+        var copied = 0;
+        foreach (var placeholder in found)
+        {
+            rewritten.Append(sql, copied, placeholder.Start - copied);
+            rewritten.Append(marker);
+            rewritten.Append(placeholder.Name);
+            copied = placeholder.Start + placeholder.Length;
+        }
+
+        rewritten.Append(sql, copied, sql.Length - copied);
+
+        return rewritten.ToString();
+    }
+
+    /// <summary>
+    /// Reads the placeholders out of a statement's text, with where each one sits.
     /// </summary>
     /// <param name="sql">The statement's text.</param>
-    /// <returns>The names, in the order they appear, without their <c>@</c>.</returns>
-    private static IEnumerable<string> Names(string sql)
+    /// <returns>The placeholders, in the order they appear.</returns>
+    private static IEnumerable<PlaceholderSpan> Spans(string sql)
     {
         var index = 0;
         while (index < sql.Length)
@@ -89,7 +136,7 @@ public static class ParameterPlaceholders
                 case '@':
                     if (StartOfName(sql, index + 1) is { } name)
                     {
-                        yield return name;
+                        yield return new PlaceholderSpan(index, name.Length + 1, name);
                         index += name.Length + 1;
                         continue;
                     }
@@ -103,6 +150,14 @@ public static class ParameterPlaceholders
             }
         }
     }
+
+    /// <summary>
+    /// One placeholder's position in a statement's text.
+    /// </summary>
+    /// <param name="Start">The index of the <c>@</c> that begins it.</param>
+    /// <param name="Length">How many characters it occupies, the marker and the name together.</param>
+    /// <param name="Name">The name, without its <c>@</c>.</param>
+    private readonly record struct PlaceholderSpan(int Start, int Length, string Name);
 
     /// <summary>
     /// Reads the placeholder name starting at a position, when one does.

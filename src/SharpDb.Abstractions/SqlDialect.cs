@@ -28,4 +28,16 @@ public enum SqlDialect
     /// the generic dialect cannot parse, and it does <em>not</em> accept back-quoted identifiers.
     /// </value>
     PostgreSql,
+
+    /// <summary>
+    /// Oracle's own dialect.
+    /// </summary>
+    /// <value>
+    /// What the Oracle Provider declares. Read with the generic dialect, because the parser this
+    /// project pins has no Oracle dialect and the generic one parses Oracle's ordinary read-only
+    /// SQL. The value is named for the engine all the same, because it is what selects the one
+    /// engine-specific rewrite there is: Oracle spells a placeholder <c>:name</c> where every
+    /// other engine in use spells it <c>@name</c>.
+    /// </value>
+    Oracle,
 }

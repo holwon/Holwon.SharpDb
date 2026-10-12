@@ -132,4 +132,70 @@ public class ParameterPlaceholdersTests
             "id",
             ParameterPlaceholders.FindUnbound("SELECT id FROM readings WHERE id = @id", new Dictionary<string, object?>()));
     }
+
+    [Fact]
+    public void Respelling_the_marker_rewrites_only_the_placeholder()
+    {
+        Assert.Equal(
+            "SELECT id FROM readings WHERE id = :id",
+            ParameterPlaceholders.WithMarker("SELECT id FROM readings WHERE id = @id", ':'));
+    }
+
+    [Fact]
+    public void Respelling_the_marker_rewrites_every_placeholder()
+    {
+        Assert.Equal(
+            "SELECT * FROM t WHERE a = :a AND b = :b",
+            ParameterPlaceholders.WithMarker("SELECT * FROM t WHERE a = @a AND b = @b", ':'));
+    }
+
+    [Fact]
+    public void Respelling_leaves_an_at_sign_inside_a_string_literal_alone()
+    {
+        Assert.Equal(
+            "SELECT id FROM readings WHERE note = '@id' AND id = :id",
+            ParameterPlaceholders.WithMarker("SELECT id FROM readings WHERE note = '@id' AND id = @id", ':'));
+    }
+
+    [Theory]
+    [InlineData("SELECT `@id` FROM t WHERE x = @x", "SELECT `@id` FROM t WHERE x = :x")]
+    [InlineData("SELECT \"@id\" FROM t WHERE x = @x", "SELECT \"@id\" FROM t WHERE x = :x")]
+    public void Respelling_leaves_an_at_sign_inside_a_quoted_identifier_alone(string sql, string expected)
+    {
+        Assert.Equal(expected, ParameterPlaceholders.WithMarker(sql, ':'));
+    }
+
+    [Fact]
+    public void Respelling_leaves_an_at_sign_inside_a_comment_alone()
+    {
+        Assert.Equal(
+            "SELECT id FROM readings -- @commented\nWHERE id = :id",
+            ParameterPlaceholders.WithMarker("SELECT id FROM readings -- @commented\nWHERE id = @id", ':'));
+
+        Assert.Equal(
+            "SELECT id FROM readings /* @commented */ WHERE id = :id",
+            ParameterPlaceholders.WithMarker("SELECT id FROM readings /* @commented */ WHERE id = @id", ':'));
+    }
+
+    [Theory]
+    [InlineData("SELECT 1 @@ 2")]
+    [InlineData("SELECT a @> b FROM t")]
+    [InlineData("SELECT a @- b FROM t")]
+    [InlineData("SELECT id FROM t WHERE id = @ -1")]
+    public void Respelling_leaves_an_at_sign_that_is_an_operator_alone(string sql)
+    {
+        Assert.Equal(sql, ParameterPlaceholders.WithMarker(sql, ':'));
+    }
+
+    [Fact]
+    public void Respelling_a_statement_with_no_placeholder_returns_it_unchanged()
+    {
+        Assert.Equal("SELECT id FROM readings", ParameterPlaceholders.WithMarker("SELECT id FROM readings", ':'));
+    }
+
+    [Fact]
+    public void Respelling_rejects_a_missing_statement()
+    {
+        Assert.Throws<ArgumentNullException>(() => ParameterPlaceholders.WithMarker(null!, ':'));
+    }
 }
