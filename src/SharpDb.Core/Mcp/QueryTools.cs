@@ -76,6 +76,19 @@ public sealed class QueryTools(
             return Failed(decision.Reason!);
         }
 
+        // A placeholder the caller gave no value for is refused here rather than left to the
+        // Driver. Measured, the three engines do three different things with one: SQLite and MySQL
+        // refuse the statement, while PostgreSQL parses the leftover @ as its absolute-value
+        // operator and answers with rows the caller never asked for. A wrong answer that looks
+        // like a right one is the one outcome this server must never produce (ADR 0010).
+        var bindings = QueryParameters.From(parameters);
+        if (ParameterPlaceholders.FindUnbound(sql, bindings) is { } unbound)
+        {
+            return Failed(
+                $"No value was supplied for the placeholder @{unbound}. "
+                + "Add it to the parameters object under its name without the @ prefix.");
+        }
+
         var rowLimit = RowLimitFor(maxRows);
 
         // The statement is recorded and the values are not: the statement is what explains a
@@ -92,7 +105,7 @@ public sealed class QueryTools(
             var result = await QueryExecutor.ExecuteAsync(
                 connection,
                 sql,
-                QueryParameters.From(parameters),
+                bindings,
                 rowLimit,
                 options.TimeoutSeconds,
                 cancellationToken);

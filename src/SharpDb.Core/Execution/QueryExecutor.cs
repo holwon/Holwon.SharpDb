@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Diagnostics;
 using Dapper;
 
 namespace SharpDb.Core.Execution;
@@ -41,6 +42,7 @@ internal static class QueryExecutor
         CancellationToken cancellationToken)
     {
         using var deadline = DeadlineFor(timeoutSeconds, cancellationToken);
+        var started = Stopwatch.GetTimestamp();
 
         var command = new CommandDefinition(
             sql,
@@ -54,14 +56,61 @@ internal static class QueryExecutor
 
             return await ReadAsync(reader, maxRows, deadline.Token);
         }
-        catch (Exception) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        catch (Exception) when (IsOurTimeout(deadline, cancellationToken, started, timeoutSeconds))
         {
-            // The deadline passed and the caller did not cancel, so the timeout is this server's
-            // own and the caller is told about it rather than about whichever exception a Driver
-            // chose to raise for it. A Driver that ignores both the command's timeout and the token
-            // is still caught here, because the deadline has passed either way.
+            // The statement outlived this server's timeout, so the caller is told about the
+            // timeout rather than about whichever exception a Driver chose to raise for it.
             throw new QueryTimedOutException(timeoutSeconds);
         }
+    }
+
+    /// <summary>
+    /// Whether a failure is this server's own timeout rather than the database's own answer.
+    /// </summary>
+    /// <param name="deadline">The deadline every read runs under.</param>
+    /// <param name="cancellationToken">The caller's own token.</param>
+    /// <param name="started">The timestamp the statement started at.</param>
+    /// <param name="timeoutSeconds">The configured timeout in seconds.</param>
+    /// <returns><see langword="true"/> when the failure is the timeout.</returns>
+    /// <remarks>
+    /// Two ways of recognising it, and the second is not redundant. The deadline being cancelled
+    /// is the ordinary case — Core's own timer fired. But a Driver is free to enforce the
+    /// command's timeout itself, and measured, MySqlConnector does exactly that and raises its own
+    /// exception from its own timer, which can win the race against Core's cancellation callback
+    /// by a hair. Requiring the flag alone would then let that Driver's wording escape to the
+    /// caller as a database error — measured: <c>The Command Timeout expired…</c> instead of this
+    /// server's fixed sentence — and the same query would report differently depending on which
+    /// timer happened to fire first.
+    /// <para>
+    /// So elapsed time is the second test, and it is sound because this method is what set the
+    /// timeout: a statement that failed no earlier than the timeout it was given cannot have
+    /// failed for any other reason. The comparison is against the same number the command was
+    /// given, so a Driver that enforces it a few milliseconds early — clocks are not exact — is
+    /// still recognised.
+    /// </para>
+    /// <para>
+    /// A caller's own cancellation is excluded throughout: that is the caller's decision, not this
+    /// server's timeout, and it must stay distinguishable.
+    /// </para>
+    /// </remarks>
+    private static bool IsOurTimeout(
+        CancellationTokenSource deadline,
+        CancellationToken cancellationToken,
+        long started,
+        int timeoutSeconds)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return false;
+        }
+
+        if (deadline.IsCancellationRequested)
+        {
+            return true;
+        }
+
+        return timeoutSeconds > 0
+            && Stopwatch.GetElapsedTime(started) >= TimeSpan.FromSeconds(timeoutSeconds);
     }
 
     /// <summary>

@@ -235,6 +235,14 @@ public abstract class QueryContractSuite(IContractDatabase database)
     /// <remarks>
     /// The sentinel the comparison falls back to is what tells the two apart: a null that arrived
     /// as the text <c>"null"</c> would match nothing here.
+    /// <para>
+    /// The aggregate is aliased, which is what lets all three engines answer with the same column
+    /// name. Measured: an unaliased <c>count(*)</c> is labelled <c>count(*)</c> by MySQL and
+    /// SQLite and <c>count</c> by PostgreSQL, so an assertion naming the label would be asserting
+    /// an engine's naming habit rather than the contract. The alias is the caller's own choice of
+    /// name, which every engine honours identically — and honouring the caller's alias is the
+    /// behaviour the contract actually cares about.
+    /// </para>
     /// </remarks>
     [SkippableFact]
     public async Task A_parameter_may_be_null()
@@ -242,11 +250,11 @@ public abstract class QueryContractSuite(IContractDatabase database)
         Database.SkipWhenUnavailable();
 
         var result = await Query().ExecuteQueryAsync(
-            "SELECT count(*) FROM readings WHERE coalesce(note, '<null>') = coalesce(@note, '<null>')",
+            "SELECT count(*) AS matching FROM readings WHERE coalesce(note, '<null>') = coalesce(@note, '<null>')",
             ToolPayload.Parameters(("note", null)));
 
         Assert.NotEqual(true, result.IsError);
-        Assert.Equal("""{"columns":["count(*)"],"rows":[[1]]}""", ToolPayload.Text(result));
+        Assert.Equal("""{"columns":["matching"],"rows":[[1]]}""", ToolPayload.Text(result));
     }
 
     /// <summary>
@@ -357,22 +365,69 @@ public abstract class QueryContractSuite(IContractDatabase database)
     }
 
     /// <summary>
-    /// A placeholder with no parameter is a readable failure rather than an exception.
+    /// A placeholder with no parameter is refused, and the refusal names it.
     /// </summary>
     /// <remarks>
     /// Writing a placeholder and forgetting its value is the likeliest mistake a caller makes, and
-    /// each Driver reports it in its own way; whatever it says, it has to arrive as a failed result
-    /// (ADR 0010).
+    /// the answer has to say which name is missing so it can be corrected (ADR 0010).
+    /// <para>
+    /// The refusal is Core's, and deliberately so. Measured, the three engines do three different
+    /// things with an unbound placeholder — SQLite raises <c>InvalidOperationException</c>, MySQL
+    /// raises <c>MySqlException</c>, and PostgreSQL does neither: <c>@</c> is also its
+    /// absolute-value operator there, so <c>WHERE id = @id</c> is parsed as <c>WHERE id = abs(id)</c>,
+    /// the statement succeeds, and the caller receives rows it never asked for. Refusing it once in
+    /// Core is what turns a silent wrong answer into a sentence, and what makes all three engines
+    /// answer the same way.
+    /// </para>
     /// </remarks>
     [SkippableFact]
-    public async Task A_placeholder_with_no_parameter_is_a_readable_failure()
+    public async Task A_placeholder_with_no_parameter_is_refused_by_name()
     {
         Database.SkipWhenUnavailable();
 
         var result = await Query().ExecuteQueryAsync("SELECT id FROM readings WHERE id = @id");
 
         Assert.True(result.IsError);
-        Assert.StartsWith("Database error:", ToolPayload.Error(result));
+        Assert.Contains("@id", ToolPayload.Error(result));
+    }
+
+    /// <summary>
+    /// A placeholdered query runs when its value is supplied.
+    /// </summary>
+    /// <remarks>
+    /// The control for the assertion above: the refusal must be about the missing value and not
+    /// about the placeholder's presence, or a caller would be unable to use parameters at all.
+    /// </remarks>
+    [SkippableFact]
+    public async Task A_placeholdered_query_runs_when_its_value_is_supplied()
+    {
+        Database.SkipWhenUnavailable();
+
+        var result = await Query().ExecuteQueryAsync(
+            "SELECT id FROM readings WHERE id = @id AND id IS NOT NULL",
+            ToolPayload.Parameters(("id", 1)));
+
+        Assert.NotEqual(true, result.IsError);
+        Assert.Equal("""{"columns":["id"],"rows":[[1]]}""", ToolPayload.Text(result));
+    }
+
+    /// <summary>
+    /// A placeholder written inside a string is data, not a missing value.
+    /// </summary>
+    /// <remarks>
+    /// The refusal reads the statement, so it has to tell a placeholder from the same characters
+    /// in a literal. A caller comparing a column to the text <c>'@id'</c> is asking a question
+    /// about data, and refusing it would be refusing a statement for saying a word.
+    /// </remarks>
+    [SkippableFact]
+    public async Task A_placeholder_inside_a_string_literal_is_not_a_missing_value()
+    {
+        Database.SkipWhenUnavailable();
+
+        var result = await Query().ExecuteQueryAsync("SELECT id FROM readings WHERE note = '@id'");
+
+        Assert.NotEqual(true, result.IsError);
+        Assert.Equal("""{"columns":["id"],"rows":[]}""", ToolPayload.Text(result));
     }
 
     /// <summary>
