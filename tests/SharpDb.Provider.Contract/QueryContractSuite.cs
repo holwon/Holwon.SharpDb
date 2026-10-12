@@ -64,7 +64,7 @@ public abstract class QueryContractSuite(IContractDatabase database)
         Database.SkipWhenUnavailable();
 
         var result = await Query().ExecuteQueryAsync(
-            "SELECT id, label, ratio FROM readings ORDER BY id");
+            """SELECT id AS "id", label AS "label", ratio AS "ratio" FROM readings ORDER BY id""");
 
         Assert.NotEqual(true, result.IsError);
         Assert.Equal(
@@ -84,7 +84,8 @@ public abstract class QueryContractSuite(IContractDatabase database)
     {
         Database.SkipWhenUnavailable();
 
-        var result = await Query().ExecuteQueryAsync("SELECT id, label FROM readings WHERE id < 0");
+        var result = await Query().ExecuteQueryAsync(
+            """SELECT id AS "id", label AS "label" FROM readings WHERE id < 0""");
 
         Assert.NotEqual(true, result.IsError);
         Assert.Equal("""{"columns":["id","label"],"rows":[]}""", ToolPayload.Text(result));
@@ -100,7 +101,7 @@ public abstract class QueryContractSuite(IContractDatabase database)
 
         var tool = QueryTool.For(Database, timeoutSeconds: 30, defaultMaxRows: 2);
 
-        var result = await tool.ExecuteQueryAsync("SELECT id FROM readings ORDER BY id");
+        var result = await tool.ExecuteQueryAsync("""SELECT id AS "id" FROM readings ORDER BY id""");
 
         Assert.NotEqual(true, result.IsError);
         Assert.Equal("""{"columns":["id"],"rows":[[1],[2]],"truncated":true}""", ToolPayload.Text(result));
@@ -114,7 +115,7 @@ public abstract class QueryContractSuite(IContractDatabase database)
     {
         Database.SkipWhenUnavailable();
 
-        var result = await Query().ExecuteQueryAsync("SELECT id FROM readings ORDER BY id", maxRows: 1);
+        var result = await Query().ExecuteQueryAsync("""SELECT id AS "id" FROM readings ORDER BY id""", maxRows: 1);
 
         Assert.NotEqual(true, result.IsError);
         Assert.Equal("""{"columns":["id"],"rows":[[1]],"truncated":true}""", ToolPayload.Text(result));
@@ -132,7 +133,7 @@ public abstract class QueryContractSuite(IContractDatabase database)
     {
         Database.SkipWhenUnavailable();
 
-        var result = await Query().ExecuteQueryAsync("SELECT id FROM readings ORDER BY id", maxRows: 6);
+        var result = await Query().ExecuteQueryAsync("""SELECT id AS "id" FROM readings ORDER BY id""", maxRows: 6);
 
         Assert.NotEqual(true, result.IsError);
         Assert.Equal("""{"columns":["id"],"rows":[[1],[2],[3],[4],[5],[6]]}""", ToolPayload.Text(result));
@@ -152,7 +153,7 @@ public abstract class QueryContractSuite(IContractDatabase database)
 
         var tool = QueryTool.For(Database, timeoutSeconds: 30, maxRows: 3);
 
-        var result = await tool.ExecuteQueryAsync("SELECT id FROM readings ORDER BY id", maxRows: 9999);
+        var result = await tool.ExecuteQueryAsync("""SELECT id AS "id" FROM readings ORDER BY id""", maxRows: 9999);
 
         Assert.NotEqual(true, result.IsError);
         Assert.Equal("""{"columns":["id"],"rows":[[1],[2],[3]],"truncated":true}""", ToolPayload.Text(result));
@@ -171,7 +172,7 @@ public abstract class QueryContractSuite(IContractDatabase database)
         Database.SkipWhenUnavailable();
 
         var result = await Query().ExecuteQueryAsync(
-            "SELECT label FROM readings WHERE ratio > @ratio ORDER BY id",
+            """SELECT label AS "label" FROM readings WHERE ratio > @ratio ORDER BY id""",
             ToolPayload.Parameters(("ratio", 1.5)));
 
         Assert.NotEqual(true, result.IsError);
@@ -187,7 +188,7 @@ public abstract class QueryContractSuite(IContractDatabase database)
         Database.SkipWhenUnavailable();
 
         var result = await Query().ExecuteQueryAsync(
-            "SELECT label FROM readings WHERE id = @id",
+            """SELECT label AS "label" FROM readings WHERE id = @id""",
             ToolPayload.Parameters(("id", 2)));
 
         Assert.NotEqual(true, result.IsError);
@@ -203,7 +204,7 @@ public abstract class QueryContractSuite(IContractDatabase database)
         Database.SkipWhenUnavailable();
 
         var result = await Query().ExecuteQueryAsync(
-            "WITH doubled AS (SELECT id * 2 AS d FROM readings WHERE id = 1) SELECT d FROM doubled");
+            """WITH doubled AS (SELECT id * 2 AS d FROM readings WHERE id = 1) SELECT d AS "d" FROM doubled""");
 
         Assert.NotEqual(true, result.IsError);
         Assert.Equal("""{"columns":["d"],"rows":[[2]]}""", ToolPayload.Text(result));
@@ -229,14 +230,17 @@ public abstract class QueryContractSuite(IContractDatabase database)
     }
 
     /// <summary>
-    /// A statement the database refuses is reported with the database's own words.
+    /// A statement the database refuses is reported as a database failure, in the database's words.
     /// </summary>
     /// <remarks>
-    /// The name the caller needs in order to fix the query must survive the trip: the table it
-    /// named, in the message the server wrote about it.
+    /// The prefix is what is asserted, and it is the part every engine can answer identically: the
+    /// message the server wrote reaches the caller rather than being replaced by a sentence of this
+    /// server's own. Whether that message <em>names</em> the object the caller got wrong is the
+    /// engine's business — Oracle's <c>ORA-00942</c> does not — so it is asserted in the engines
+    /// that do it, in their own projects.
     /// </remarks>
     [SkippableFact]
-    public async Task A_statement_the_database_refuses_is_reported_with_its_words()
+    public async Task A_statement_the_database_refuses_is_reported_as_a_database_failure()
     {
         Database.SkipWhenUnavailable();
 
@@ -244,18 +248,18 @@ public abstract class QueryContractSuite(IContractDatabase database)
 
         Assert.True(result.IsError);
         Assert.StartsWith("Database error:", ToolPayload.Error(result));
-        Assert.Contains("no_such_table", ToolPayload.Error(result));
     }
 
     /// <summary>
-    /// A question about a column the database does not know is answered with the database's words.
+    /// A question about a column the database does not know is answered as a database failure.
     /// </summary>
     /// <remarks>
     /// A statement the Guard permits can still be wrong about a column, and the answer has to reach
-    /// the caller so it can correct the query rather than guess.
+    /// the caller rather than being replaced by a sentence of this server's own. As above, whether
+    /// the message names the column is the engine's business and is asserted where it holds.
     /// </remarks>
     [SkippableFact]
-    public async Task A_column_the_database_does_not_know_is_reported_with_its_words()
+    public async Task A_column_the_database_does_not_know_is_reported_as_a_database_failure()
     {
         Database.SkipWhenUnavailable();
 
@@ -263,7 +267,6 @@ public abstract class QueryContractSuite(IContractDatabase database)
 
         Assert.True(result.IsError);
         Assert.StartsWith("Database error:", ToolPayload.Error(result));
-        Assert.Contains("no_such_column", ToolPayload.Error(result));
     }
 
     /// <summary>
@@ -306,7 +309,7 @@ public abstract class QueryContractSuite(IContractDatabase database)
         Database.SkipWhenUnavailable();
 
         var result = await Query().ExecuteQueryAsync(
-            "SELECT id FROM readings WHERE id = @id AND id IS NOT NULL",
+            """SELECT id AS "id" FROM readings WHERE id = @id AND id IS NOT NULL""",
             ToolPayload.Parameters(("id", 1)));
 
         Assert.NotEqual(true, result.IsError);
@@ -326,7 +329,7 @@ public abstract class QueryContractSuite(IContractDatabase database)
     {
         Database.SkipWhenUnavailable();
 
-        var result = await Query().ExecuteQueryAsync("SELECT id FROM readings WHERE note = '@id'");
+        var result = await Query().ExecuteQueryAsync("""SELECT id AS "id" FROM readings WHERE note = '@id'""");
 
         Assert.NotEqual(true, result.IsError);
         Assert.Equal("""{"columns":["id"],"rows":[]}""", ToolPayload.Text(result));

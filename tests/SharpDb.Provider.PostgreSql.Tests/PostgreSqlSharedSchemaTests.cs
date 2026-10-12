@@ -156,4 +156,26 @@ public sealed class PostgreSqlSharedSchemaTests(PostgreSqlContractDatabase datab
         var columns = JsonDocument.Parse(ToolPayload.Text(result)).RootElement.GetProperty("columns");
         Assert.True(columns.GetArrayLength() > 0);
     }
+
+    /// <summary>
+    /// A failure names the object the caller got wrong.
+    /// </summary>
+    /// <remarks>
+    /// PostgreSQL's message carries the table's or the column's name, so a caller is told what to
+    /// correct. Oracle's messages do not, which is why this is asserted here rather than in the
+    /// shared suite.
+    /// </remarks>
+    [SkippableFact]
+    public async Task A_failure_names_the_object_it_could_not_find()
+    {
+        database.SkipWhenUnavailable();
+
+        var missingTable = await QueryTool.For(database).ExecuteQueryAsync("SELECT id FROM no_such_table");
+        var missingColumn = await QueryTool.For(database).ExecuteQueryAsync("SELECT no_such_column FROM readings");
+
+        Assert.True(missingTable.IsError);
+        Assert.Contains("no_such_table", ToolPayload.Error(missingTable));
+        Assert.True(missingColumn.IsError);
+        Assert.Contains("no_such_column", ToolPayload.Error(missingColumn));
+    }
 }

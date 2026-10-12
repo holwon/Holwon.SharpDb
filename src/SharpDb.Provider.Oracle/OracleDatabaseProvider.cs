@@ -51,16 +51,19 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
     /// Lists the tables and views the connection's own schema holds.
     /// </summary>
     /// <remarks>
-    /// A view is not a table in this dictionary — measured, <c>ALL_TABLES</c> answers nothing for
-    /// one — so the listing is the two views unioned rather than one view filtered. Neither
-    /// <c>ALL_VIEWS</c> nor <c>ALL_TABLES</c> carries the other's columns, so the second branch
-    /// supplies a null comment rather than pretending to have one.
+    /// <c>ALL_TAB_COMMENTS</c> is what is read, and both halves of that are measured rather than
+    /// assumed. It carries a table's and a view's comment — <c>ALL_TABLES</c> and <c>ALL_VIEWS</c>
+    /// have no comment column at all (<c>ORA-00904</c>) — and its <c>TABLE_TYPE</c> says which kind
+    /// each object is, so the two facts arrive in one read instead of a union of two views that
+    /// each know only one of them. A view is not a table in the dictionary: measured,
+    /// <c>ALL_TABLES</c> answers nothing for the seeded view, which is why reading one view is
+    /// enough here where reading the two table-catalogue views would not be.
     /// </remarks>
     private const string ListTablesSql = """
-        SELECT table_name, 'TABLE', comments FROM all_tables WHERE owner = USER
-        UNION ALL
-        SELECT view_name, 'VIEW', CAST(NULL AS VARCHAR2(4000)) FROM all_views WHERE owner = USER
-        ORDER BY 1
+        SELECT table_name, table_type, comments
+        FROM all_tab_comments
+        WHERE owner = USER
+        ORDER BY table_name
         """;
 
     /// <summary>
@@ -73,9 +76,7 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
     /// the listing exists to convey.
     /// </remarks>
     private const string ListDatabasesSql = """
-        SELECT DISTINCT owner FROM all_tables
-        UNION
-        SELECT DISTINCT owner FROM all_views
+        SELECT DISTINCT owner FROM all_tab_comments
         UNION
         SELECT USER FROM dual
         ORDER BY 1
@@ -92,17 +93,11 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
     /// folded one, because a caller who spelled the name the catalogue's way meant that object.
     /// </remarks>
     private const string DescribeExistsSql = """
-        SELECT name, kind, comment FROM (
-            SELECT table_name AS name, 'TABLE' AS kind, comments AS comment,
-                   CASE WHEN table_name = :name THEN 0 ELSE 1 END AS rank
-            FROM all_tables
-            WHERE owner = USER AND (table_name = :name OR table_name = UPPER(:name))
-            UNION ALL
-            SELECT view_name, 'VIEW', CAST(NULL AS VARCHAR2(4000)),
-                   CASE WHEN view_name = :name THEN 0 ELSE 1 END
-            FROM all_views
-            WHERE owner = USER AND (view_name = :name OR view_name = UPPER(:name))
-            ORDER BY rank, name
+        SELECT * FROM (
+            SELECT table_name, table_type, comments
+            FROM all_tab_comments
+            WHERE owner = USER AND table_name IN (:name, UPPER(:name))
+            ORDER BY CASE WHEN table_name = :name THEN 0 ELSE 1 END, table_name
         ) WHERE ROWNUM = 1
         """;
 
@@ -120,7 +115,7 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
         SELECT column_name, column_id, data_type, data_length, data_precision, data_scale,
                char_length, nullable, data_default, identity_column
         FROM all_tab_columns
-        WHERE owner = USER AND table_name = :table
+        WHERE owner = USER AND table_name = :table_name
         ORDER BY column_id
         """;
 
@@ -137,7 +132,7 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
         FROM all_constraints c
         JOIN all_cons_columns cc
           ON cc.owner = c.owner AND cc.constraint_name = c.constraint_name
-        WHERE c.owner = USER AND c.table_name = :table AND c.constraint_type = 'P'
+        WHERE c.owner = USER AND c.table_name = :table_name AND c.constraint_type = 'P'
         ORDER BY cc.position
         """;
 
@@ -170,7 +165,7 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
         JOIN all_cons_columns rcc
           ON rcc.owner = rc.owner AND rcc.constraint_name = rc.constraint_name
          AND rcc.position = cc.position
-        WHERE c.owner = USER AND c.table_name = :table AND c.constraint_type = 'R'
+        WHERE c.owner = USER AND c.table_name = :table_name AND c.constraint_type = 'R'
         ORDER BY c.constraint_name, cc.position
         """;
 
@@ -193,11 +188,11 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
         FROM all_indexes i
         JOIN all_ind_columns ic
           ON ic.index_owner = i.owner AND ic.index_name = i.index_name
-        WHERE i.table_owner = USER AND i.table_name = :table
+        WHERE i.table_owner = USER AND i.table_name = :table_name
           AND i.index_name NOT IN (
               SELECT c.index_name
               FROM all_constraints c
-              WHERE c.owner = USER AND c.table_name = :table
+              WHERE c.owner = USER AND c.table_name = :table_name
                 AND c.constraint_type = 'P' AND c.index_name IS NOT NULL
           )
         ORDER BY i.index_name, ic.column_position
@@ -247,8 +242,9 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
             }
 
             // Measured: this Driver binds by position unless told otherwise, and a positional bind
-            // of a named placeholder silently fills the wrong column. Set on the connection so that
-            // the statement the Tool runs — whose command Core builds — binds by name too.
+            // of a named placeholder silently fills the wrong column — or, when a statement names a
+            // placeholder twice, raises rather than answering. Set on the connection so that the
+            // statement the Tool runs — whose command Core builds — binds by name too.
             connection.BindByName = true;
 
             return connection;
@@ -274,7 +270,7 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
-            var type = reader.GetString(1).Equals("VIEW", StringComparison.Ordinal)
+            var type = reader.GetString(1).Equals("VIEW", StringComparison.OrdinalIgnoreCase)
                 ? TableType.View
                 : TableType.Table;
 
@@ -353,7 +349,7 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
         string tableName,
         CancellationToken cancellationToken)
     {
-        await using var command = connection.CreateCommand();
+        await using var command = CommandFor(connection);
         command.CommandText = DescribeExistsSql;
         AddNameParameter(command, tableName);
 
@@ -364,7 +360,7 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
         }
 
         var stored = reader.GetString(0);
-        var type = reader.GetString(1).Equals("VIEW", StringComparison.Ordinal)
+        var type = reader.GetString(1).Equals("VIEW", StringComparison.OrdinalIgnoreCase)
             ? TableType.View
             : TableType.Table;
 
@@ -383,7 +379,7 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
         string tableName,
         CancellationToken cancellationToken)
     {
-        await using var command = connection.CreateCommand();
+        await using var command = CommandFor(connection);
         command.CommandText = DescribeColumnsSql;
         AddTableParameter(command, tableName);
 
@@ -416,7 +412,7 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
         string tableName,
         CancellationToken cancellationToken)
     {
-        await using var command = connection.CreateCommand();
+        await using var command = CommandFor(connection);
         command.CommandText = DescribePrimaryKeySql;
         AddTableParameter(command, tableName);
 
@@ -442,7 +438,7 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
         string tableName,
         CancellationToken cancellationToken)
     {
-        await using var command = connection.CreateCommand();
+        await using var command = CommandFor(connection);
         command.CommandText = DescribeForeignKeysSql;
         AddTableParameter(command, tableName);
 
@@ -485,7 +481,7 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
         string tableName,
         CancellationToken cancellationToken)
     {
-        await using var command = connection.CreateCommand();
+        await using var command = CommandFor(connection);
         command.CommandText = DescribeIndexesSql;
         AddTableParameter(command, tableName);
 
@@ -639,14 +635,48 @@ public sealed class OracleDatabaseProvider : IDatabaseProvider
     }
 
     /// <summary>
+    /// Creates a command that binds by name and fetches <c>LONG</c> values whole.
+    /// </summary>
+    /// <param name="connection">The connection the command belongs to.</param>
+    /// <returns>The command, ready for a statement with named placeholders.</returns>
+    /// <remarks>
+    /// Measured, and each for a different reason.
+    /// <para>
+    /// <c>BindByName</c>: this Driver binds by position unless told otherwise, and a statement that
+    /// names a placeholder more than once — which the name lookup does, so that a caller's spelling
+    /// and the catalogue's can be tried together — cannot bind positionally at all. The connection
+    /// is set the same way when it is opened; setting it here too keeps a command correct however it
+    /// was reached, and is cheap.
+    /// </para>
+    /// <para>
+    /// <c>InitialLONGFetchSize</c>: it defaults to zero, which means a <c>LONG</c> column is
+    /// fetched empty. Measured: <c>ALL_TAB_COLUMNS.DATA_DEFAULT</c> is a <c>LONG</c>, so a column's
+    /// default read back as null until this was set to fetch the whole value.
+    /// </para>
+    /// </remarks>
+    private static OracleCommand CommandFor(DbConnection connection)
+    {
+        var command = (OracleCommand)connection.CreateCommand();
+        command.BindByName = true;
+        command.InitialLONGFetchSize = -1;
+
+        return command;
+    }
+
+    /// <summary>
     /// Binds the name the catalogue holds.
     /// </summary>
     /// <param name="command">The command to bind to.</param>
     /// <param name="tableName">The name the catalogue holds.</param>
+    /// <remarks>
+    /// The name is <c>table_name</c> rather than <c>table</c>, because <c>TABLE</c> is an Oracle
+    /// reserved word and a bind variable may not be named after one — measured, <c>:table</c> is
+    /// <c>ORA-01745</c>.
+    /// </remarks>
     private static void AddTableParameter(DbCommand command, string tableName)
     {
         var parameter = command.CreateParameter();
-        parameter.ParameterName = "table";
+        parameter.ParameterName = "table_name";
         parameter.Value = tableName;
 
         command.Parameters.Add(parameter);
