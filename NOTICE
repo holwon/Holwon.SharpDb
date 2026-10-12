@@ -1,0 +1,20 @@
+SharpDb
+Copyright (C) 2026 the SharpDb authors
+
+This program is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, version 3 of the License. See LICENSE for the full text.
+
+--------------------------------------------------------------------------------
+
+Third-party components
+
+Oracle Managed Data Access (Oracle.ManagedDataAccess.Core)
+Copyright (c) Oracle and/or its affiliates.
+
+This project uses Oracle Managed Data Access, licensed under Oracle Free
+Distribution Terms. The driver is redistributed inside the SharpDb package so that
+one install serves every supported database type. The terms require that a copy of
+the license accompany the distribution, so
+`third-party/oracle-manageddataaccess-core-LICENSE.txt` holds it and is packed
+alongside this notice.

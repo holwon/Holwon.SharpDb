@@ -41,8 +41,8 @@
     <ToolCommandName>sharpdb-mcp</ToolCommandName>
     <RollForward>Major</RollForward>
     <Version>0.1.2</Version>
-    <Description>Read-only MCP server that lets an AI agent inspect a relational database and run read-only queries. One install serves MySQL, PostgreSQL and SQLite; the database type is chosen at startup from the client's environment block.</Description>
-    <PackageTags>mcp;database;mysql;postgresql;sqlite;readonly</PackageTags>
+    <Description>Read-only MCP server that lets an AI agent inspect a relational database and run read-only queries. One install serves MySQL, PostgreSQL, SQLite and Oracle; the database type is chosen at startup from the client's environment block.</Description>
+    <PackageTags>mcp;database;mysql;postgresql;sqlite;oracle;readonly</PackageTags>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/holwon/Holwon.SharpDb.git</RepositoryUrl>
@@ -62,6 +62,8 @@
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="/" />
     <None Include="..\..\LICENSE" Pack="true" PackagePath="/" />
+    <None Include="..\..\NOTICE" Pack="true" PackagePath="/" />
+    <None Include="..\..\third-party\oracle-manageddataaccess-core-LICENSE.txt" Pack="true" PackagePath="/third-party/" />
   </ItemGroup>
 
   <!--
@@ -77,6 +79,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SharpDb.Core\SharpDb.Core.csproj" />
     <ProjectReference Include="..\SharpDb.Provider.MySql\SharpDb.Provider.MySql.csproj" />
+    <ProjectReference Include="..\SharpDb.Provider.Oracle\SharpDb.Provider.Oracle.csproj" />
     <ProjectReference Include="..\SharpDb.Provider.PostgreSql\SharpDb.Provider.PostgreSql.csproj" />
     <ProjectReference Include="..\SharpDb.Provider.Sqlite\SharpDb.Provider.Sqlite.csproj" />
   </ItemGroup>

@@ -31,6 +31,7 @@ public class StartupContractTests
         var reason = StartupAssertions.AssertFailsFast(result);
         Assert.Contains("'postgres' is unknown", reason);
         Assert.Contains("\"mysql\"", reason);
+        Assert.Contains("\"oracle\"", reason);
         Assert.Contains("\"postgresql\"", reason);
         Assert.Contains("\"sqlite\"", reason);
     }
@@ -62,6 +63,41 @@ public class StartupContractTests
             ["SHARPDB__TYPE"] = "postgresql",
             ["SHARPDB__CONNECTIONSTRING"] =
                 $"Host=127.0.0.1;Port=1;Database=none;Username=postgres;Password={password}",
+        });
+
+        var reason = StartupAssertions.AssertFailsFast(result);
+        Assert.DoesNotContain(password, reason, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Password", reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Startup_accepts_the_oracle_type_and_reaches_the_database()
+    {
+        // The type is recognized and the Provider is assembled: what fails is the connection, and
+        // it fails as the Oracle Provider would. Nothing is listening on this port, so the run
+        // proves the whole path from the configured type to a Driver that speaks Oracle, without
+        // needing a server for a startup contract test. The Data Source is the short form an
+        // Oracle connection string may use, which is the one this Driver parses without a client
+        // installed.
+        var result = await HostProcess.RunAsync(new Dictionary<string, string?>
+        {
+            ["SHARPDB__TYPE"] = "Oracle",
+            ["SHARPDB__CONNECTIONSTRING"] = "User Id=none;Password=none;Data Source=127.0.0.1:1/none",
+        });
+
+        var reason = StartupAssertions.AssertFailsFast(result);
+        Assert.Contains("Could not connect to the oracle database", reason);
+    }
+
+    [Fact]
+    public async Task Startup_against_an_oracle_database_that_does_not_exist_reports_a_reason_without_credentials()
+    {
+        const string password = "sharpdb-should-not-appear";
+
+        var result = await HostProcess.RunAsync(new Dictionary<string, string?>
+        {
+            ["SHARPDB__TYPE"] = "oracle",
+            ["SHARPDB__CONNECTIONSTRING"] = $"User Id=sharpdb;Password={password};Data Source=127.0.0.1:1/none",
         });
 
         var reason = StartupAssertions.AssertFailsFast(result);

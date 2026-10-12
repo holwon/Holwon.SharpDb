@@ -41,7 +41,7 @@ _Avoid_：Discovery、Reflection
 _Avoid_：Validator、Filter
 
 **Read-only enforcement**：
-数据库引擎层的只读保证——即使 Guard 被绕过，写操作仍会被数据库自身拒绝（MySQL 的会话只读、SQLite 的文件只读、PostgreSQL 的会话事务只读）。
+数据库引擎层的只读保证——即使 Guard 被绕过，写操作仍会被数据库自身拒绝。具体实现机制由各 Provider 决定，不在本词条内。
 _Avoid_：用 Guard 指代它
 
 **Policy**：

@@ -8,6 +8,7 @@ using SharpDb.Core.Guard;
 using SharpDb.Core.Mcp;
 using SharpDb.Core.Startup;
 using SharpDb.Provider.MySql;
+using SharpDb.Provider.Oracle;
 using SharpDb.Provider.PostgreSql;
 using SharpDb.Provider.Sqlite;
 
@@ -55,6 +56,7 @@ internal static class Program
             var options = SharpDbConfiguration.Read(builder.Configuration);
             var catalog = new ProviderCatalog(
                 new MySqlDatabaseProvider(),
+                new OracleDatabaseProvider(),
                 new PostgreSqlDatabaseProvider(),
                 new SqliteDatabaseProvider());
             var provider = catalog.Select(options.Type);
