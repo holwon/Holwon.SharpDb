@@ -34,6 +34,7 @@ INSERT INTO orders (user_id, total) VALUES (1, 10.50), (2, 20.25);
 CREATE ROLE sharpdb_ro LOGIN PASSWORD 'a-strong-password';
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO sharpdb_ro;
 
--- A new role does not inherit the right to resolve names in the schema, and without this the
--- tool's own introspection would be refused rather than the fixture's data being unreadable.
-GRANT USAGE ON SCHEMA public TO sharpdb_ro;
+-- No GRANT USAGE is needed, and its absence is deliberate rather than an oversight: measured on
+-- PostgreSQL 16, the public schema ships with a default ACL that grants USAGE to PUBLIC, so a new
+-- role can already resolve names there. Granting it again would be a line that looks load-bearing
+-- while doing nothing — and a reader who later removes it would expect a breakage that never comes.

@@ -238,8 +238,15 @@ if (-not $SkipPostgreSql) {
 
         # Seeding needs DDL, so the fixture is built with the superuser; the tool is then pointed at
         # a SELECT-only account, which is what the README tells a user to create.
+        #
+        # `ON_ERROR_STOP=1` is what makes the exit-code check below mean anything. Measured: without
+        # it psql reports an error on stderr for every failing statement and still exits 0, so a seed
+        # that died on its first CREATE would leave the container half-built and the harness would
+        # carry on and test the wrong thing. mysql exits non-zero by itself, which is why only this
+        # invocation needs the flag.
         $seedSql = (Resolve-Path (Join-Path $PWD 'tools/seed-verification-postgresql.sql')).Path
-        $seedOutput = Get-Content $seedSql -Raw | docker exec -i $postgresContainerName psql -U postgres -d app 2>&1
+        $seedOutput = Get-Content $seedSql -Raw |
+            docker exec -i $postgresContainerName psql -v ON_ERROR_STOP=1 -U postgres -d app 2>&1
         $seedExitCode = $LASTEXITCODE
         if ($seedExitCode -ne 0) {
             throw "Seeding PostgreSQL failed: $seedOutput"

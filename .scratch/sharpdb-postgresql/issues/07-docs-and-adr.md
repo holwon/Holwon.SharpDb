@@ -47,3 +47,38 @@
   - `sharpdb: SHARPDB__TYPE 'postgres' is unknown (expected "mysql" or "postgresql" or "sqlite").`
   后者同时证明 spec 的要求仍然成立：`postgres` 继续是"不认识的值"。
 - `dotnet build SharpDb.slnx`：0 error。
+
+### 2026-10-12（复审追加）
+
+**Commit:** `见下方「复审发现的两个缺陷」` — 代码复审自查时发现本票的两处错误，均已修。
+
+#### 缺陷一：验证脚本的种子失败检查是空的
+
+`tools/verify-installed-tool.ps1` 的 PostgreSQL 分支照抄了 MySQL 的写法：跑种子脚本、检查 `$LASTEXITCODE`、非零则 `throw`。但**两个客户端的退出码语义不同**——实测：
+
+| 客户端 | 坏 SQL 的退出码 | 正常 SQL 的退出码 |
+|---|---|---|
+| `mysql` | `1` | `0` |
+| `psql` | **`0`**（不加标志时） | `0` |
+
+`psql` 默认对每条失败语句在 stderr 上报错，**却仍退出 0**。所以那句 `throw "Seeding PostgreSQL failed"` 永远不会触发：一个在第一条 `CREATE TABLE` 上就失败的种子会留下半成品容器，而验证脚本会继续往下跑并"验证"错误的东西——正是本脚本文件头明确禁止的"静默不跑"。
+
+**修法**：给该次 `psql` 调用加 `-v ON_ERROR_STOP=1`。实测确认：坏 SQL 现在 exit=3，且正常的种子脚本在该标志下仍然成功。修好后补做了**从未做过的端到端验证**——用种子脚本建出的 `sharpdb_ro` 账号跑真实 Provider，四个内省工具全部可用（`list_tables` 报出 3 个对象、`describe_table` 对表与视图均正确、`list_databases` 得到 `[app, postgres]` 且模板库已排除）。
+
+#### 缺陷二：种子 SQL 里一条注释的理由是错的
+
+`tools/seed-verification-postgresql.sql` 里原本写着：
+
+> A new role does not inherit the right to resolve names in the schema, and without this the tool's own introspection would be refused…
+
+并据此执行了一条 `GRANT USAGE ON SCHEMA public TO sharpdb_ro`。**实测推翻了这个理由**：PostgreSQL 16 的 `public` schema 自带默认 ACL（`\dn+ public` 显示 `=U/pg_database_owner`，即对 `PUBLIC` 授予 `USAGE`），所以新建的角色**本来就能**解析该 schema 下的名字，`has_schema_privilege('probe2','public','USAGE')` 在**没有**任何显式授权时就是 `t`。
+
+那条 `GRANT` 是一次**没起作用的操作**，注释给出的解释也不成立。这比多一行更糟：读者将来把它删掉时会预期出问题，而问题不会来，于是要么白查一轮，要么开始怀疑整个文件的其它理由。
+
+**修法**：删掉那条 `GRANT USAGE`，把注释改成记录实测事实——**不授权是刻意的**，因为默认 ACL 已经给了。
+
+顺带记一个反直觉的旁证：把 `public` 的 `USAGE` 显式收回后再查，报的是 `relation "users" does not exist`，而不是权限错误。**权限不足在 PostgreSQL 上会伪装成"对象不存在"**，这会让排错方向偏掉。
+
+#### 为什么两轴子代理都没抓到
+
+两处都不在 diff 的"逻辑"里，而在**注释所声称的理由**与实际行为之间。两轴复核都按惯例把注释当作可靠线索读了过去。这与仓库既有教训同类：*引用一条理由前先验证那条理由*——只不过这次的引用者是我自己写的注释。
