@@ -9,8 +9,7 @@ namespace SharpDb.Provider.Oracle;
 /// Serves Oracle databases, reaching them exclusively through the Driver this project owns.
 /// </summary>
 /// <remarks>
-/// Three of this engine's properties shape the whole Provider, and each was measured rather than
-/// assumed.
+/// This engine's properties shape the whole Provider, and each was measured rather than assumed.
 /// <para>
 /// The first is that the read-only guarantee has to be taken at <em>transaction</em> level. Oracle
 /// has no session-wide read-only mode; what it has is <c>SET TRANSACTION READ ONLY</c>, which

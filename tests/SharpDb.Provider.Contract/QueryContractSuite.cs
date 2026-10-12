@@ -276,12 +276,12 @@ public abstract class QueryContractSuite(IContractDatabase database)
     /// Writing a placeholder and forgetting its value is the likeliest mistake a caller makes, and
     /// the answer has to say which name is missing so it can be corrected (ADR 0010).
     /// <para>
-    /// The refusal is Core's, and deliberately so. Measured, the three engines do three different
-    /// things with an unbound placeholder — SQLite raises <c>InvalidOperationException</c>, MySQL
-    /// raises <c>MySqlException</c>, and PostgreSQL does neither: <c>@</c> is also its
+    /// The refusal is Core's, and deliberately so. Measured, the engines disagree about an unbound
+    /// placeholder — SQLite raises <c>InvalidOperationException</c>, MySQL raises
+    /// <c>MySqlException</c>, and PostgreSQL does neither: <c>@</c> is also its
     /// absolute-value operator there, so <c>WHERE id = @id</c> is parsed as <c>WHERE id = abs(id)</c>,
     /// the statement succeeds, and the caller receives rows it never asked for. Refusing it once in
-    /// Core is what turns a silent wrong answer into a sentence, and what makes all three engines
+    /// Core is what turns a silent wrong answer into a sentence, and what makes every engine
     /// answer the same way.
     /// </para>
     /// </remarks>

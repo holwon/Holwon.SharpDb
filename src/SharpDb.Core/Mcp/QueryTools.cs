@@ -77,7 +77,7 @@ public sealed class QueryTools(
         }
 
         // A placeholder the caller gave no value for is refused here rather than left to the
-        // Driver. Measured, the three engines do three different things with one: SQLite and MySQL
+        // Driver. Measured, the engines disagree about one: SQLite and MySQL
         // refuse the statement, while PostgreSQL parses the leftover @ as its absolute-value
         // operator and answers with rows the caller never asked for. A wrong answer that looks
         // like a right one is the one outcome this server must never produce (ADR 0010).

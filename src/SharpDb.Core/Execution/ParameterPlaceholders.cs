@@ -8,13 +8,13 @@ namespace SharpDb.Core.Execution;
 /// </summary>
 /// <remarks>
 /// A forgotten value is the likeliest mistake a caller makes, and it must not be answered as
-/// silence: measured, the three engines do three different things with an unbound placeholder —
-/// SQLite raises <c>InvalidOperationException</c>, MySQL raises its own exception, and PostgreSQL
-/// does neither. On PostgreSQL <c>@</c> is also the absolute-value operator, so <c>WHERE id = @id</c>
+/// silence: measured, the engines disagree about an unbound placeholder — SQLite raises
+/// <c>InvalidOperationException</c>, MySQL raises its own exception, and PostgreSQL does neither.
+/// On PostgreSQL <c>@</c> is also the absolute-value operator, so <c>WHERE id = @id</c>
 /// with nothing bound is parsed as <c>WHERE id = abs(id)</c> and the query succeeds, returning rows
 /// the caller never asked for. A wrong answer that looks like a right one is the one outcome this
 /// server must never produce, so the check happens here, in Core, before any engine sees the
-/// statement — which also makes all three engines behave identically.
+/// statement — which also makes every engine behave identically.
 /// <para>
 /// The scan is lexical rather than a search of the raw text, because the text is not the statement:
 /// <c>SELECT '@id'</c> holds an <c>@id</c> that is data, and a comment holds one that is prose.

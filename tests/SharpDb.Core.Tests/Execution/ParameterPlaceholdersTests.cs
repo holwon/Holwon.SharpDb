@@ -188,6 +188,29 @@ public class ParameterPlaceholdersTests
     }
 
     [Fact]
+    public void Respelling_rewrites_an_at_sign_glued_to_a_name_because_the_scan_reads_it_as_a_placeholder()
+    {
+        // `t@dblink` is Oracle's database-link syntax, but `@dblink` names a value to the scan, so
+        // the marker is rewritten here. That is harmless rather than wrong: this rewrite only runs
+        // once the statement is about to execute, and a statement holding `@dblink` never gets that
+        // far — the Tool's unbound-placeholder check runs first and refuses it (see the test below).
+        // Refusing is the right answer, because a database link reaches another database and this
+        // server is bound to one (use-cases.md).
+        Assert.Equal("SELECT * FROM t:dblink", ParameterPlaceholders.WithMarker("SELECT * FROM t@dblink", ':'));
+    }
+
+    [Fact]
+    public void A_dblink_is_read_as_a_placeholder_so_the_tool_refuses_it_before_any_rewrite()
+    {
+        // The load-bearing half: the same `@dblink` is what FindUnbound reports, so a query using a
+        // database link is refused by name — before translation ever runs, and on every engine,
+        // because this check is Core's and is dialect-independent.
+        Assert.Equal(
+            "dblink",
+            ParameterPlaceholders.FindUnbound("SELECT * FROM t@dblink", new Dictionary<string, object?>()));
+    }
+
+    [Fact]
     public void Respelling_a_statement_with_no_placeholder_returns_it_unchanged()
     {
         Assert.Equal("SELECT id FROM readings", ParameterPlaceholders.WithMarker("SELECT id FROM readings", ':'));
