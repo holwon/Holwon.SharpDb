@@ -9,8 +9,12 @@
 # Full run from a clean tree (this is the whole recipe; nothing here is implicit):
 #   dotnet build SharpDb.slnx -c Release
 #   dotnet pack src/SharpDb/SharpDb.csproj -c Release -o artifacts
-#   dotnet tool install --global Holwon.SharpDb.Mcp --add-source artifacts --version 0.1.0
+#   dotnet tool install --global Holwon.SharpDb.Mcp --add-source artifacts --version 0.1.2
 #   pwsh -File tools/verify-installed-tool.ps1
+#
+# The version above is the one `<Version>` in src/SharpDb/SharpDb.csproj carries: the install has to
+# name the same number the pack produced, and publish.yml refuses to release when a tag and the
+# project disagree, so a stale number here is a recipe that cannot run.
 #
 # Switches:
 #   -SkipMySql    verify without asking for Docker at all. Use this to say "I am not
