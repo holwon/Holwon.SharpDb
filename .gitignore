@@ -339,6 +339,9 @@ __pycache__/
 # tools/**
 # !tools/packages.config
 
+# Codebase memory (local agent scratch data)
+.codebase-memory/
+
 # Tabs Studio
 *.tss
 
