@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Oracle Provider. It owns its Driver outright: Oracle.ManagedDataAccess.Core is
+    referenced here and nowhere else, so replacing or adding a database type never
+    reaches Core (ADR 0004).
+  -->
+  <ItemGroup>
+    <PackageReference Include="Oracle.ManagedDataAccess.Core" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpDb.Abstractions\SharpDb.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

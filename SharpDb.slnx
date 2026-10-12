@@ -1,12 +1,13 @@
 <Solution>
 
   <!--
-    The six production projects. src/SharpDb is the host executable; it is the
+    The production projects. src/SharpDb is the host executable; it is the
     only project that references the Providers (ADR 0004).
   -->
   <Project Path="src/SharpDb.Abstractions/SharpDb.Abstractions.csproj" />
   <Project Path="src/SharpDb.Core/SharpDb.Core.csproj" />
   <Project Path="src/SharpDb.Provider.MySql/SharpDb.Provider.MySql.csproj" />
+  <Project Path="src/SharpDb.Provider.Oracle/SharpDb.Provider.Oracle.csproj" />
   <Project Path="src/SharpDb.Provider.PostgreSql/SharpDb.Provider.PostgreSql.csproj" />
   <Project Path="src/SharpDb.Provider.Sqlite/SharpDb.Provider.Sqlite.csproj" />
   <Project Path="src/SharpDb/SharpDb.csproj" />
@@ -20,6 +21,7 @@
   <Project Path="tests/SharpDb.Core.Tests/SharpDb.Core.Tests.csproj" />
   <Project Path="tests/SharpDb.Provider.Contract/SharpDb.Provider.Contract.csproj" />
   <Project Path="tests/SharpDb.Provider.MySql.Tests/SharpDb.Provider.MySql.Tests.csproj" />
+  <Project Path="tests/SharpDb.Provider.Oracle.Tests/SharpDb.Provider.Oracle.Tests.csproj" />
   <Project Path="tests/SharpDb.Provider.PostgreSql.Tests/SharpDb.Provider.PostgreSql.Tests.csproj" />
   <Project Path="tests/SharpDb.Provider.Sqlite.Tests/SharpDb.Provider.Sqlite.Tests.csproj" />
   <Project Path="tests/SharpDb.Tests/SharpDb.Tests.csproj" />
