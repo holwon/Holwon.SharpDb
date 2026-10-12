@@ -20,6 +20,8 @@
 
 ### 2026-10-12
 
+**Commit:** `372bbbe` — `test: pin the PostgreSQL description contract`（本票与票 03 同一次提交）
+
 外键、索引与注释的读法在票 02 一起就位了（同为 `DescribeTableAsync` 的一部分），本票补的是**契约套件覆盖不到的那部分**：注释一处都没有测过，表达式索引也没测过。
 
 **逐条落在哪里**

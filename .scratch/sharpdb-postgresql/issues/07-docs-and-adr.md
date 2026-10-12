@@ -21,6 +21,10 @@
 
 ### 2026-10-12
 
+**Commit:** `b6e3f72` — `docs: say what PostgreSQL support means, and record the decisions behind it`
+
+（审阅后另有一次措辞修正：`0748abd`）
+
 **改了什么**
 
 - **README**：开头从"两种"改为三种；新增 PostgreSQL 的 `mcp.json` 示例；新增「What each type supports」小表（类型 / Driver / 备注，含 PG 10+ 与"只在 16 上测过"）；新增「What a description reports about a view」一节，把**视图列约束是否传播**这条真实分歧写成使用者能读到的事实（MySQL 传播，PG 与 SQLite 不传播）；配置参考表的 `SHARPDB__TYPE` 改为三值并补"忽略大小写与首尾空格"；错误表新增/更新两行，并点明 **`postgres` 不是别名**。

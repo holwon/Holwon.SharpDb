@@ -21,6 +21,8 @@ MySQL 一侧必须原样不动：反引号标识符仍被放行。
 
 ### 2026-10-12
 
+**Commit:** `3bba571` — `test: pin the PostgreSQL read-only policy at both ends`
+
 策略数据在票 02 随 Provider 一起声明了；本票把它**从两端各钉一遍**——Guard 那一端在 Core 测试里（策略是构造参数），Provider 那一端在 PG 项目里（Provider 交出去的那份策略就是 Guard 执行的那份）。
 
 **为什么两端都要测**

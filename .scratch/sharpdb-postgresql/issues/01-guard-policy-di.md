@@ -22,7 +22,9 @@ Guard 不再是一个用 `GenericDialect` 解析、写死四个 MySQL 函数名�
 
 ### 2026-10-12
 
-`feat/postgresql-provider` 上的第一个提交。
+**Commit:** `db30349` — `refactor: build the Guard from the selected Provider's policy`
+
+`feat/postgresql-provider` 上的第一个代码提交。
 
 **落下什么**
 

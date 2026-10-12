@@ -24,6 +24,8 @@
 
 ### 2026-10-12
 
+**Commit:** `f6de1fc` — `fix: refuse an unbound placeholder, and report our own timeout`
+
 这一票暴露了**两个真实缺陷**（一个必须修，一个顺手修好），并让三份查询契约全绿。
 
 ### 一、`count(*)` 列标签分歧（spec 已预言）

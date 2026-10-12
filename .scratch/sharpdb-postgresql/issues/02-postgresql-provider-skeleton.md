@@ -24,7 +24,9 @@
 
 ### 2026-10-12
 
-`feat/postgresql-provider` 的第二个提交。
+**Commit:** `ef858bf` — `feat: add the PostgreSQL provider`
+
+`feat/postgresql-provider` 的第二个代码提交。
 
 **落下什么**
 
