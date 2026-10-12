@@ -16,9 +16,15 @@ namespace SharpDb.Provider.PostgreSql.Tests;
 /// </remarks>
 /// <param name="database">The seeded container the collection shares.</param>
 [Collection(PostgreSqlContractCollection.Name)]
-public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
+public sealed class PostgreSqlSpecificTests
 {
-    private readonly PostgreSqlContractDatabase _database = database;
+    private readonly PostgreSqlContractDatabase _database;
+
+    /// <summary>
+    /// Creates the tests over the seeded container the collection shares.
+    /// </summary>
+    /// <param name="database">The fixture this test class reads through.</param>
+    public PostgreSqlSpecificTests(PostgreSqlContractDatabase database) => _database = database;
 
     /// <summary>
     /// The legacy <c>serial</c> spelling of auto-increment is reported as auto-increment.
@@ -33,7 +39,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task DescribeTable_reports_a_serial_column_as_autoincrement()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
         await SeedAsync();
 
         await using var connection = await OpenSpareAsync();
@@ -56,7 +62,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task DescribeTable_reports_a_bigserial_column_as_autoincrement()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
         await SeedAsync();
 
         await using var connection = await OpenSpareAsync();
@@ -82,7 +88,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task DescribeTable_reports_a_views_columns_without_the_base_tables_constraints()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
         await SeedAsync();
 
         await using var connection = await OpenSpareAsync();
@@ -111,7 +117,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task DescribeTable_reports_a_base_tables_own_nullability_and_defaults()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
         await SeedAsync();
 
         await using var connection = await OpenSpareAsync();
@@ -139,7 +145,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task DescribeTable_reports_the_declared_type_whole()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
 
         await using var seed = new Npgsql.NpgsqlConnection(_database.SpareConnectionString);
         await seed.OpenAsync();
@@ -181,7 +187,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task DescribeTable_reaches_an_object_through_any_capitalisation()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
         await SeedAsync();
 
         await using var connection = await OpenSpareAsync();
@@ -203,7 +209,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task DescribeTable_reports_the_name_the_catalogue_spells()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
 
         await using var seed = new Npgsql.NpgsqlConnection(_database.SpareConnectionString);
         await seed.OpenAsync();
@@ -238,7 +244,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task ListTables_leaves_the_system_schemas_out()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
 
         await using var connection = await OpenSpareAsync();
         var listed = await _database.Provider.ListTablesAsync(connection, CancellationToken.None);
@@ -258,7 +264,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task ListDatabases_leaves_the_template_databases_out()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
 
         await using var connection = await OpenSpareAsync();
         var databases = await _database.Provider.ListDatabasesAsync(connection, CancellationToken.None);
@@ -281,7 +287,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task DescribeTable_reports_table_and_column_comments()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
         await SeedAsync();
 
         await using var connection = await OpenSpareAsync();
@@ -305,7 +311,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task DescribeTable_reports_a_views_comment()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
         await SeedAsync();
 
         await using var connection = await OpenSpareAsync();
@@ -322,7 +328,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task ListTables_reports_a_tables_comment()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
         await SeedAsync();
 
         await using var connection = await OpenSpareAsync();
@@ -345,7 +351,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task DescribeTable_reports_an_expression_index_with_no_columns()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
         await SeedAsync();
 
         await using var connection = await OpenSpareAsync();
@@ -368,7 +374,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task DescribeTable_keeps_the_named_columns_of_a_mixed_index()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
         await SeedAsync();
 
         await using var connection = await OpenSpareAsync();
@@ -392,7 +398,7 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
     [SkippableFact]
     public async Task DescribeTable_lists_indexes_without_the_one_backing_the_primary_key()
     {
-        database.SkipWhenUnavailable();
+        _database.SkipWhenUnavailable();
         await SeedAsync();
 
         await using var connection = await OpenSpareAsync();
@@ -408,6 +414,83 @@ public sealed class PostgreSqlSpecificTests(PostgreSqlContractDatabase database)
                 ("idx_indexed_role_unique", true, new[] { "role", "org_id" }),
             ],
             schema.Indexes.Select(index => (index.Name, index.IsUnique, index.Columns.ToArray())));
+    }
+
+    /// <summary>
+    /// The session the Provider opens carries the read-only setting beyond the transaction that set it.
+    /// </summary>
+    /// <remarks>
+    /// The shared suite asserts the guarantee by attempting a write. This asserts the mechanism,
+    /// and on this engine the mechanism is the whole trap: the spelling that looks right —
+    /// <c>SET SESSION TRANSACTION READ ONLY</c>, which is what MySQL's Provider sends — is
+    /// accepted by PostgreSQL and applies only to the transaction that issued it, which under the
+    /// Driver's autocommit has already ended. A Provider that sent it would answer this question
+    /// with <c>off</c>, and the write test would fail only for whichever statement happened to be
+    /// first. Reading the setting in a second command is what shows the mode outlived the first.
+    /// <para>
+    /// Each command is its own transaction under autocommit, so the intervening <c>SELECT 1</c>
+    /// is what makes this a statement about the session rather than about one transaction.
+    /// </para>
+    /// </remarks>
+    [SkippableFact]
+    public async Task The_session_the_provider_opens_is_read_only_beyond_its_transaction()
+    {
+        _database.SkipWhenUnavailable();
+
+        await using var connection = await OpenSpareAsync();
+
+        await using (var intervening = connection.CreateCommand())
+        {
+            intervening.CommandText = "SELECT 1";
+            await intervening.ExecuteScalarAsync();
+        }
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SHOW transaction_read_only";
+
+        Assert.Equal("on", await command.ExecuteScalarAsync());
+    }
+
+    /// <summary>
+    /// The engine refuses a write through the connection the Provider opened.
+    /// </summary>
+    /// <remarks>
+    /// The ticket asks for the refusal to be the <em>engine's</em> rather than the Guard's, so the
+    /// write is sent straight down the connection, never through a Tool. The exception is the
+    /// Driver's own, which is what proves the server answered rather than this code.
+    /// </remarks>
+    [SkippableFact]
+    public async Task The_connection_the_provider_opens_refuses_a_write_at_the_engine()
+    {
+        _database.SkipWhenUnavailable();
+
+        await using var connection = await OpenSpareAsync();
+        await using var write = connection.CreateCommand();
+        write.CommandText = "INSERT INTO serial_orgs (name) VALUES ('a write the engine must refuse')";
+
+        var refusal = await Assert.ThrowsAnyAsync<Npgsql.PostgresException>(() => write.ExecuteNonQueryAsync());
+
+        Assert.Contains("read-only transaction", refusal.MessageText);
+    }
+
+    /// <summary>
+    /// The engine also refuses a temporary table, which is still a table.
+    /// </summary>
+    /// <remarks>
+    /// A temporary object is the shape a write might plausibly take on a session whose reads are
+    /// what it is for, and measured, the read-only mode refuses it. Asserted so that a future
+    /// Provider change that widened the exception to temporary objects would be caught.
+    /// </remarks>
+    [SkippableFact]
+    public async Task The_connection_the_provider_opens_refuses_a_temporary_table()
+    {
+        _database.SkipWhenUnavailable();
+
+        await using var connection = await OpenSpareAsync();
+        await using var create = connection.CreateCommand();
+        create.CommandText = "CREATE TEMP TABLE scratch (a INT)";
+
+        await Assert.ThrowsAnyAsync<Npgsql.PostgresException>(() => create.ExecuteNonQueryAsync());
     }
 
     /// <summary>
