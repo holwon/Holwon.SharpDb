@@ -62,6 +62,16 @@ public sealed class OracleContractDatabase : IContractDatabase, IAsyncLifetime
     /// </summary>
     private const string SparePassword = "sharpdb-spare-pw";
 
+    /// <summary>
+    /// Oracle's "unable to read data - table definition has changed" (<c>ORA-01466</c>).
+    /// </summary>
+    /// <remarks>
+    /// The engine answers this when a query is parsed against a table definition that has just
+    /// changed and the change is not yet visible to the session. Its message calls the fault
+    /// transient, which is what lets the fixture absorb it (see <see cref="WarmUpAsync"/>).
+    /// </remarks>
+    private const int TableDefinitionChanged = 1466;
+
     private OracleContainer? _container;
 
     /// <inheritdoc/>
@@ -146,6 +156,7 @@ public sealed class OracleContractDatabase : IContractDatabase, IAsyncLifetime
         ConnectionString = _container.GetConnectionString();
 
         await SeedAsync();
+        await WarmUpAsync();
 
         Available = true;
     }
@@ -212,6 +223,46 @@ public sealed class OracleContractDatabase : IContractDatabase, IAsyncLifetime
         await create.ExecuteNonQueryAsync();
 
         SpareConnectionString = BuildSpareConnectionString();
+    }
+
+    /// <summary>
+    /// Proves the seeded schema is readable through the Provider's read-only path before any test reads it.
+    /// </summary>
+    /// <remarks>
+    /// Measured, and the engine's own error text is the reason. The first read-only query issued after
+    /// the seed's DDL can fail with <c>ORA-01466</c> ("unable to read data - table definition has
+    /// changed"): the query is parsed against a table definition the seed's own DDL has just changed,
+    /// and the new definition is not yet visible to the session. The engine reports it as a transient
+    /// fault — its message carries a link saying so — and it is not what any assertion here is about,
+    /// so the fixture absorbs it rather than letting it surface as a spurious failure in a test.
+    /// <para>
+    /// The read is the shape the assertions use — the shared schema, through a connection the Provider
+    /// opened read-only — so bounding the fault here keeps it out of every suite. A fault that persists
+    /// past the retries is not this transient one and is left to throw, so a database that is genuinely
+    /// unreadable still fails loudly instead of being retried away.
+    /// </para>
+    /// </remarks>
+    private async Task WarmUpAsync()
+    {
+        const int attempts = 5;
+
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await using var connection = await Provider.CreateReadOnlyConnectionAsync(
+                    ConnectionString,
+                    CancellationToken.None);
+                await using var command = connection.CreateCommand();
+                command.CommandText = "SELECT count(*) FROM readings";
+                await command.ExecuteScalarAsync();
+                return;
+            }
+            catch (OracleException failure) when (failure.Number == TableDefinitionChanged && attempt < attempts)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100 * attempt));
+            }
+        }
     }
 
     /// <summary>
