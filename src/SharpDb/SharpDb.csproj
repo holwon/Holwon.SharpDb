@@ -46,7 +46,7 @@
     <PackageTags>mcp;database;mysql;postgresql;sqlite;oracle;readonly</PackageTags>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageIcon>logo.png</PackageIcon>
+    <PackageIcon>logo-g.png</PackageIcon>
     <RepositoryUrl>https://github.com/holwon/Holwon.SharpDb.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
@@ -72,7 +72,7 @@
       project directory, so the default globbing does not pick it up: the include
       is what puts it at the package root, which is where PackageIcon looks for it.
     -->
-    <None Include="..\logo\logo.png" Pack="true" PackagePath="/" />
+    <None Include="..\logo\logo-g.png" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <!--
