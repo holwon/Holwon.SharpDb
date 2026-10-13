@@ -8,12 +8,12 @@ SharpDb 目前支持四种数据库（MySQL、PostgreSQL、SQLite、Oracle）。
 
 SQL Server 与现有四种引擎有一处**结构性**差异，且是本次新增引擎的核心：它**没有引擎层只读**。`SET TRANSACTION ISOLATION LEVEL` 只有五个隔离级别、没有 READ ONLY；`ApplicationIntent=ReadOnly` 是 Always On 的只读**路由**开关，只有目标真是可读副本时才是硬边界，standalone 实例上被接受但什么都不强制。前四种引擎各自都有一句真正生效的第 2 层（MySQL/PG 会话级、SQLite 文件级、Oracle 事务级），SQL Server 一句都没有。
 
-这意味着"加一个 Provider"不只是加一个项目：它第一次让只读三层里**第 2 层缺席**，因此必须把这个事实写进领域模型（新术语），把第 3 层（账号权限）从"建议"升为"必需"，并把共享契约套件里唯一直接验证第 2 层的那条断言诚实地让给真有第 2 层的引擎。其余差异（`[bracket]` 标识符、`sys.*` 目录、schema 限定名、rowset function）都是可处理的常规分歧。
+这意味着"加一个 Provider"不只是加一个项目：它第一次让只读三层里**第 2 层缺席**，因此必须把这个事实写进领域模型（新术语），并诚实地记下它的后果：在本引擎上，"即使 Guard 被绕过、数据库仍会拒绝写"这句话**不成立**——唯一挡在写前面的是连接所用账号的权限。**这是引擎的事实，不是 SharpDb 对用户的要求**：用哪个账号由运维方决定，SharpDb 不检查、不校验、也不改写用户的连接串。同时把共享契约套件里唯一直接验证第 2 层的那条断言诚实地让给真有第 2 层的引擎。其余差异（`[bracket]` 标识符、`sys.*` 目录、schema 限定名、rowset function）都是可处理的常规分歧。
 
 ## Solution
 
 1. 新增一个 **SQL Server Provider**，实现 `IDatabaseProvider` 全部成员，驱动用 `Microsoft.Data.SqlClient`（MIT、net8.0；自 7.0 起 Entra/Azure 认证被拆到独立包，基础包因此比 5.x 更瘦）。
-2. **第 2 层如实降级为"意图"**：Provider 在 `CreateReadOnlyConnectionAsync` 里用 `SqlConnectionStringBuilder` 把 `ApplicationIntent=ReadOnly` 写进连接串再打开连接。**不假装它挡住写**。新增 ADR 记录：这一层只在目标是 Always On 可读副本时成立，standalone 上是 no-op，因此**第 3 层（只给 `SELECT` 的登录）在本引擎上是必需而非建议**——与 Oracle 的 ADR 0014 同构。
+2. **第 2 层如实降级为"意图"**：Provider 在 `CreateReadOnlyConnectionAsync` 里用 `SqlConnectionStringBuilder` 把 `ApplicationIntent=ReadOnly` 写进连接串再打开连接。**不假装它挡住写**。新增 ADR 记录：这一层只在目标是 Always On 可读副本时成立，standalone 上是 no-op，因此它**不等于** enforcement。ADR 只陈述这个事实及其后果（本引擎上唯一挡写的是账号权限），**不向用户提出任何要求**——SharpDb 把用户写的连接串原样拿去用，不检查、不校验、不改写；与 Oracle 的 ADR 0014 同构（都是"第 2 层有缺口，因此账号才是真正的边界"）。
 3. **Core 加一个方言值**：`SqlDialect` 新增一个 SQL Server 值，在 `ReadOnlyGuard` 的方言映射里指向解析器自带的 MS SQL 方言（`SqlParserCS 0.6.5` 确有 `MsSqlDialect`）。收益：`TOP n` 与 `[bracket]` 标识符能被解析——后者在通用方言下是被拒的，既有测试把它记为"可接受的缺口"，本引擎让该缺口闭合。
 4. **禁用函数表加四个 rowset function**：`OPENROWSET` / `OPENQUERY` / `OPENDATASOURCE` / `OPENXML`。它们是"读本机文件/读另一台服务器"的入口，与 PostgreSQL 的 `pg_read_file` 同类；**正因为第 2 层不挡写，第 1 层在本引擎上更重要**。`xp_cmdshell` / `sp_executesql` 走 `EXEC`，而 `EXEC` 不在许可清单里，已被拒，不入表。
 5. **内省读 `sys.*` 目录视图**，与 PostgreSQL 选目录而非 `information_schema` 同理：`sys.identity_columns`（自增）、`sys.extended_properties` 的 `MS_Description`（注释）、`sys.foreign_key_columns.constraint_column_id`（复合外键列配对顺序）、`sys.indexes` / `sys.index_columns`（唯一性、列序、主键索引）都只有目录视图拿得到。
@@ -36,7 +36,7 @@ SQL Server 与现有四种引擎有一处**结构性**差异，且是本次新�
 9. As an MCP client, I want `TOP n` to be accepted by the Guard, so that ordinary SQL Server read-only SQL is not refused.
 10. As an MCP client, I want `[bracketed]` identifiers to be accepted by the Guard, so that ordinary SQL Server SQL is not refused.
 11. As an MCP client, I want a rowset function that reaches outside the database (`OPENROWSET`, `OPENQUERY`, `OPENDATASOURCE`, `OPENXML`) to be refused with a clear reason, so that a read-only query cannot read the server's files or another server.
-12. As an MCP client, I want a write attempt to be refused by the engine when the account is the least-privilege one the ADR requires, so that the server's read-only promise holds even if the Guard is bypassed.
+12. As an MCP client, I want a write attempt to be refused by the engine when the connection's account has no write permission, so that the server's read-only promise holds even if the Guard is bypassed.
 13. As an MCP client, I want the connection to carry read-only intent, so that on an Always On readable secondary the engine itself refuses a write.
 14. As an MCP client, I want a query that exceeds the configured timeout to be interrupted, so that a slow statement does not hang me.
 15. As an MCP client, I want a query returning no rows to still name its columns, so that I know the statement was understood.
@@ -55,7 +55,7 @@ SQL Server 与现有四种引擎有一处**结构性**差异，且是本次新�
 25. As a human operator, I want to configure the server for SQL Server with `SHARPDB__TYPE=mssql` and an ordinary SqlClient connection string, so that switching engines does not require a different install.
 26. As a human operator, I want the server to fail fast at startup if the SQL Server database is unreachable, so that a misconfiguration is caught before the first Tool call.
 27. As a human operator, I want the README to state which SQL Server versions are supported, so that I do not deploy against an unsupported version.
-28. As a human operator, I want the README to state that SQL Server has no engine-level read-only mode, so that I know the account's privileges are the boundary rather than advice.
+28. As a human operator, I want the README to state that SQL Server has no engine-level read-only mode, so that I understand what actually stands between a bypassed Guard and a write.
 29. As a human operator, I want the README to list SQL Server's semantic differences from the other engines in the same capability matrix, so that I can brief my team on what to expect.
 30. As a human operator, I want the README to explain that a self-signed certificate needs `TrustServerCertificate=True`, so that I can connect to a development server without disabling encryption.
 31. As a human operator, I want the README to explain that the account needs `SELECT` plus `VIEW DEFINITION`, so that introspection does not silently report fewer objects than exist.
@@ -64,7 +64,7 @@ SQL Server 与现有四种引擎有一处**结构性**差异，且是本次新�
 
 ### SQL Server 数据库管理员
 
-34. As a SQL Server DBA, I want the server to connect with a least-privilege account, so that the server cannot modify my data.
+34. As a SQL Server DBA, I want to decide for myself which account the server connects with — including a least-privilege one — so that how much power the server has is mine to bound, not something the tool imposes.
 35. As a SQL Server DBA, I want to be told plainly that the engine has no read-only mode to set, so that I enforce the boundary through the account's privileges rather than assuming the server did.
 36. As a SQL Server DBA, I want the server's introspection to use only catalogue views reachable by an ordinary account, so that it needs no elevated role.
 37. As a SQL Server DBA, I want to know that metadata visibility is permission-filtered, so that I grant `VIEW DEFINITION` deliberately rather than wonder why objects are missing.
@@ -105,7 +105,7 @@ SQL Server 与现有四种引擎有一处**结构性**差异，且是本次新�
 
 - **第 1 层（Guard）**：算法仍是 Core 唯一的一份。本引擎新增的是**数据**——一个方言值 + 四个禁用函数名。
 - **第 2 层（引擎层）**：**本引擎缺席**。Provider 写 `ApplicationIntent=ReadOnly`，但这只表达意图。新增 ADR 必须写明：它在 Always On 可读副本上是硬边界，在 standalone 上是 no-op，因此不能算作 enforcement。
-- **第 3 层（账号权限）**：**必需**。`SELECT` 挡写与 DDL，`VIEW DEFINITION` 决定元数据可见范围。
+- **第 3 层（账号权限）**：**本引擎上它是唯一的边界**，因为第 2 层不存在。这是引擎的事实，不是对用户的要求：账号由运维方选定，SharpDb 不检查也不改动连接串。`SELECT` 挡写与 DDL，`VIEW DEFINITION` 决定元数据可见范围。
 - 三层模型本身不变；变的是"第 2 层可能缺席"这件事第一次成为模型的一部分——由新术语 `Read-only intent` 承载。
 
 ### 领域术语
@@ -124,7 +124,7 @@ SQL Server 与现有四种引擎有一处**结构性**差异，且是本次新�
 **测哪些模块**（复用三个既有接缝，零新增）：
 
 1. **`IDatabaseProvider` 接缝**：新引擎实现 `IContractDatabase`，继承两个共享契约套件（内省 + 查询）。这是既有四个引擎的同一套断言，第五个引擎必须同样通过。
-2. **引擎专属套件**：承载共享套件不能包含的、本引擎独有的真事——连接串带只读 intent、最小权限账号下引擎拒写、限定名与裸名的分界、`MS_Description` 注释、`IDENTITY` 自增、复合外键列配对顺序、索引唯一性与列序、`EXPLAIN`/`SHOW` 由引擎报错、`[bracket]` 标识符被 Guard 接受、rowset function 被 Guard 拒绝、超时被中断。
+2. **引擎专属套件**：承载共享套件不能包含的、本引擎独有的真事——连接串带只读 intent、账号无写权限时引擎拒写（引擎的事实，不是对用户的要求）、限定名与裸名的分界、`MS_Description` 注释、`IDENTITY` 自增、复合外键列配对顺序、索引唯一性与列序、`EXPLAIN`/`SHOW` 由引擎报错、`[bracket]` 标识符被 Guard 接受、rowset function 被 Guard 拒绝、超时被中断。
 3. **MCP Tool 面**：查询类断言经由按宿主方式组装的真 Tool 进行（既有的 `QueryTool` 组装点），这样行数上限、超时、拒绝理由与 JSON 形状都被覆盖。
 4. **真宿主进程**：一条进程级 smoke 覆盖 `Program.cs` 的注册与 `SHARPDB__TYPE=mssql` 的选择——进程内测试证明不了宿主的接线，这是本仓库已记录的教训。
 
@@ -136,7 +136,7 @@ SQL Server 与现有四种引擎有一处**结构性**差异，且是本次新�
 - 断言下沉的写法：Oracle 那次把 6 条断言移出共享套件并落到各引擎项目（`.scratch/sharpdb-oracle/issues/02-…`）。
 - 集合夹具：一个容器服务整个集合，而不是每个测试类一个容器。
 
-**本次测试上的一个特殊决定**：共享套件里唯一直接验证第 2 层的断言（打开连接后试着 INSERT，断言引擎拒绝）**下沉**到 MySQL / PostgreSQL / SQLite / Oracle 四个引擎项目。SQL Server 自己改为两条断言——"连接串带只读 intent"（本引擎能保证的部分）与"最小权限账号下引擎拒写"（本引擎真正的边界，即第 3 层）。这不是把断言改弱，而是把一个引擎做不到的断言交给能做到的引擎，并为本引擎补上它真正成立的那条。
+**本次测试上的一个特殊决定**：共享套件里唯一直接验证第 2 层的断言（打开连接后试着 INSERT，断言引擎拒绝）**下沉**到 MySQL / PostgreSQL / SQLite / Oracle 四个引擎项目。SQL Server 自己改为两条断言——"连接串带只读 intent"（本引擎能保证的部分）与"账号无写权限时引擎拒写"（本引擎真正的边界，即第 3 层；断言的是**引擎行为**，不是对用户的要求）。这不是把断言改弱，而是把一个引擎做不到的断言交给能做到的引擎，并为本引擎补上它真正成立的那条。
 
 ## Out of Scope
 

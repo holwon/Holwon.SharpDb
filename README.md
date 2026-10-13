@@ -128,13 +128,13 @@ Every tool works on every engine. What differs is the engine's own physics, and 
 | `ON UPDATE` referential action | yes | yes | yes | **no — a syntax error** |
 | Read-only enforcement | session | session | file | **transaction** |
 | Read-only mode stops DDL | yes | yes | yes | **no — DDL implicitly commits** |
-| The account's privileges are | advised | advised | not applicable | **required** |
+| The account's privileges are | advised | advised | not applicable | **the only boundary** |
 | `EXPLAIN` returns a plan | yes | yes | yes | **no — engine reports a syntax error** |
 | `SHOW` | yes | no — the engine reports a syntax error | no | **no — the engine reports a syntax error** |
 | Error messages name the object | yes | yes | yes | **no** |
 | `SELECT` with no `FROM` | yes | yes | yes | **no on 21c — a syntax error** |
 
-Two of these matter most. On Oracle, `''` is NULL, so a comparison against an empty string matches nothing and a column written with one reads back as null; and Oracle's read-only mode is a property of a transaction, so a DDL statement commits and thereby escapes it — which is why the account's privileges are the boundary there rather than advice (see [ADR 0014](docs/adr/0014-oracle-read-only-transactional-with-ddl-hole.md)).
+Two of these matter most. On Oracle, `''` is NULL, so a comparison against an empty string matches nothing and a column written with one reads back as null; and Oracle's read-only mode is a property of a transaction, so a DDL statement commits and thereby escapes it — so on Oracle the account's privileges are the only thing standing between a bypassed Guard and a write (see [ADR 0014](docs/adr/0014-oracle-read-only-transactional-with-ddl-hole.md)).
 
 Oracle also folds an unquoted identifier to upper case, so a query that does not alias its columns answers with upper-case labels (`SELECT id …` gives a column named `ID`). Alias the columns — `SELECT id AS "id" …` — when the label matters.
 
@@ -206,7 +206,7 @@ GRANT SELECT ON app.* TO 'sharpdb_ro'@'%';
 
 `SELECT` is enough for all four tools, including reading views. No `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `DROP`, `ALTER` or `FILE` — so even if something were let through, the database would refuse it.
 
-On Oracle this layer is not advice but the boundary: the engine's read-only mode does not stop a DDL statement, so only a `SELECT`-only account keeps one out (see [ADR 0014](docs/adr/0014-oracle-read-only-transactional-with-ddl-hole.md)).
+On Oracle the engine's read-only mode does not stop a DDL statement, so the only thing that keeps one out is what the connection's account is allowed to do — which account that is belongs to whoever configured the server (see [ADR 0014](docs/adr/0014-oracle-read-only-transactional-with-ddl-hole.md)).
 
 For SQLite there is no account to restrict: the file's own permissions are the boundary, so point SharpDb at a copy or a read-only path if the file matters.
 
