@@ -23,13 +23,13 @@ namespace SharpDb.Provider.Contract;
 /// </para>
 /// <para>
 /// The read-only guarantee itself is three layers (ADR 0002), and the middle one is why this suite
-/// cannot assert the guarantee whole. Each of MySQL, PostgreSQL, SQLite and Oracle has an engine
-/// layer that refuses a write on its own — a session setting, a file mode, a transaction — but that
-/// is a property of those engines rather than of the port, and an engine may have none. SQL Server
-/// is the first such engine: it has no read-only mode to set, so the only thing between a
-/// bypassed Guard and a write there is the account's own privileges (ADR 0016). The assertion that
-/// a write is refused by the engine therefore lives in each engine's own project, where the engine
-/// that can answer it does, and this suite keeps only what every Provider can answer truthfully.
+/// cannot assert the guarantee whole. Most engines have an engine layer that refuses a write on its
+/// own — a session setting, a file mode, a transaction — but that is a property of those engines
+/// rather than of the port, and an engine may have none. SQL Server is the first such engine: it
+/// has no read-only mode to set, so the only thing between a bypassed Guard and a write there is
+/// the account's own privileges (ADR 0016). The assertion that a write is refused by the engine
+/// therefore lives in each engine's own project, where the engine that can answer it does, and this
+/// suite keeps only what every Provider can answer truthfully.
 /// </para>
 /// <para>
 /// Only what the Provider answers is asserted — which objects are in this database, how a table is

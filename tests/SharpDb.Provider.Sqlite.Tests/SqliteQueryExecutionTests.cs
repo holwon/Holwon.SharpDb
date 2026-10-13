@@ -9,7 +9,7 @@ namespace SharpDb.Provider.Sqlite.Tests;
 /// <remarks>
 /// Everything every engine agrees on — the payload's shape, the limits, parameters, a refusal, a
 /// database error, a timeout, and that a message discloses nothing sensitive — lives in
-/// <c>SharpDb.Provider.Contract</c> and is asserted there once, for both. What remains here is
+/// <c>SharpDb.Provider.Contract</c> and is asserted there once for every engine. What remains here is
 /// SQLite's own: a database file that is not there at all.
 /// </remarks>
 public class SqliteQueryExecutionTests

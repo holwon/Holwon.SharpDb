@@ -7,8 +7,8 @@ namespace SharpDb.Provider.PostgreSql.Tests;
 /// </summary>
 /// <remarks>
 /// The body is empty on purpose: every assertion lives in <see cref="QueryContractSuite"/>, and
-/// the MySQL and SQLite projects run the same suite against the same schema. Three runs of one
-/// suite are what make the Tool's behaviour a contract rather than three implementations that
+/// every engine's test project runs the same suite against the same schema. One suite, run once per
+/// engine, is what makes the Tool's behaviour a contract rather than several implementations that
 /// resemble one another.
 /// </remarks>
 /// <param name="database">The seeded container the collection shares.</param>

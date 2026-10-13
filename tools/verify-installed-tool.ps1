@@ -2,9 +2,9 @@
 # client's configuration at the `sharpdb-mcp` shim, then drive the four tools over real stdio.
 #
 # Why this is not a test project: every test in this repository runs the host *it* just built. The
-# distribution claim is about the *packaged* tool — "one install serves MySQL and SQLite" — and only
-# a real install can exercise that. So this harness reads nothing from SharpDb's build output: both
-# databases are made from scratch, and it speaks to the shim a user ends up with.
+# distribution claim is about the *packaged* tool — that one install serves every database type —
+# and only a real install can exercise that. So this harness reads nothing from SharpDb's build
+# output: the database is made from scratch, and it speaks to the shim a user ends up with.
 #
 # Full run from a clean tree (this is the whole recipe; nothing here is implicit):
 #   dotnet build SharpDb.slnx -c Release

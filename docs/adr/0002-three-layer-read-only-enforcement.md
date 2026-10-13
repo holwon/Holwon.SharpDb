@@ -10,6 +10,22 @@
 
 不走 Guard 不是偷懒——守卫的对象是**不可信的输入**，而内省 SQL 是 Provider 自己写的常量字符串，没有注入面。实测也证明它能被引擎层独立挡住：在 `Mode=ReadOnly` 的连接上，`PRAGMA journal_mode = WAL`、`PRAGMA user_version = 42`、`INSERT` 全部被引擎拒绝。
 
+## 第 2 层 2026-10 修订：SQL Server，以及第一个**缺席**的第 2 层
+
+新增 SQL Server Provider 时发现：本引擎**没有**引擎层只读可设，因此第 2 层在这条链上是**空的**。
+
+| 引擎 | 第 2 层的机制 | 性质 |
+|---|---|---|
+| MySQL | `SET SESSION TRANSACTION READ ONLY` | enforcement |
+| SQLite | 连接串 `Mode=ReadOnly` | enforcement |
+| PostgreSQL | `SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY` | enforcement |
+| Oracle | 只读事务（挡 DML，不挡 DDL） | enforcement（有已知缺口） |
+| **SQL Server** | **无** —— `ApplicationIntent=ReadOnly` 只是**意图** | **intent，不是 enforcement** |
+
+`SET TRANSACTION ISOLATION LEVEL` 只有五个隔离级别、没有 READ ONLY；`ApplicationIntent=ReadOnly` 是 Always On 的只读**路由**开关，在可读副本上是硬边界，在 standalone 实例上一次写也挡不住——实测：带该关键字的连接上 `CREATE TABLE` 成功。
+
+这不削弱三层模型，而是把它补全：模型原本假设第 2 层总是存在。现在由 `GLOSSARY.md` 的 `Read-only intent` 词条承载"第 2 层可能缺席"，`0016` 记录本引擎的具体事实与后果（唯一挡写的是账号权限），`README` 的能力矩阵加一整列说明各引擎的差异。
+
 ## 第 2 层 2026-10 修订：PostgreSQL，以及一个只在它上面存在的坑
 
 新增 PostgreSQL Provider 时补入第三种会话只读机制，同时记一个**实测**出来的陷阱——它足以让一个看起来正确的实现形同虚设。

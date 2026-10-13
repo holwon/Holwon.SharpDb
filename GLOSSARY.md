@@ -44,6 +44,10 @@ _Avoid_：Validator、Filter
 数据库引擎层的只读保证——即使 Guard 被绕过，写操作仍会被数据库自身拒绝。具体实现机制由各 Provider 决定，不在本词条内。
 _Avoid_：用 Guard 指代它
 
+**Read-only intent**：
+引擎层的一种只读约束，**只在特定部署形态下才真的拒绝写**：它表达意图，但不构成保证。与 `Read-only enforcement` 相对，两者的差别不是强弱，而是**是否无条件成立**。
+_Avoid_：用 Read-only intent 指代 Read-only enforcement
+
 **Policy**：
 Provider 贡献给 Guard 的**只读策略数据**——两项：一个方言值，与一组该引擎上只读查询不该调用的函数名。策略只能往禁用表里**加**名字，不能放宽许可清单；Guard 的算法仍只有一份、留在 Core。
 _Avoid_：用 Policy 指代 Guard 算法本身、Rule、配置

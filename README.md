@@ -11,7 +11,7 @@ SharpDb runs as a local subprocess of your MCP client and speaks the Model Conte
 | `execute_query` | The rows a read-only SQL statement returns. |
 | `list_databases` | Which databases the connection can see. Informational only. |
 
-One install serves **MySQL**, **PostgreSQL**, **SQLite** and **Oracle**. Which one a process serves is decided at startup from its environment, not by installing a different package — so moving between databases never means reinstalling.
+One install serves **MySQL**, **PostgreSQL**, **SQLite**, **Oracle** and **SQL Server**. Which one a process serves is decided at startup from its environment, not by installing a different package — so moving between databases never means reinstalling.
 
 ## Install
 
@@ -105,6 +105,28 @@ The connection string is an ordinary ODP.NET one, in either the full `(DESCRIPTI
 
 The `command` is the command the install put on your `PATH`, and `args` stays empty: everything that varies lives in the `env` block, so nothing about the server needs editing when the database changes.
 
+**SQL Server**
+
+```json
+{
+  "servers": {
+    "sharpdb-sqlserver": {
+      "type": "stdio",
+      "command": "sharpdb-mcp",
+      "args": [],
+      "env": {
+        "SHARPDB__TYPE": "mssql",
+        "SHARPDB__CONNECTIONSTRING": "Server=localhost;Database=app;User Id=sharpdb_ro;Password=CHANGE_ME;TrustServerCertificate=True"
+      }
+    }
+  }
+}
+```
+
+The connection string is an ordinary SqlClient one, so an existing one can be pasted in as it stands. Write your SQL with `@name` placeholders as you would for any other engine. `TrustServerCertificate=True` is what you need against a server whose certificate is self-signed — a local development server, typically — because the Driver encrypts by default from version 7.0 and will otherwise refuse the connection. It is a development convenience rather than a recommendation: on a server with a real certificate, leave it out.
+
+Unlike the other engines, SQL Server has **no read-only mode for the server to set**, so nothing is added to the string beyond the connection's read-only *intent* (see [Read-only](#read-only)).
+
 The key names use a **double** underscore. That is the .NET configuration system's hierarchy separator; a single underscore spells a different variable, which the server silently does not read.
 
 ### What each type supports
@@ -112,35 +134,44 @@ The key names use a **double** underscore. That is the .NET configuration system
 | Type | Driver | Notes |
 |---|---|---|
 | `mysql` | MySqlConnector | — |
+| `mssql` | Microsoft.Data.SqlClient | SQL Server 2016 or later. Tested against 2022 (16.0); there is no multi-version test matrix. |
 | `oracle` | Oracle.ManagedDataAccess.Core | Oracle Database 12c or later. Tested against XE 21; there is no multi-version test matrix. |
 | `postgresql` | Npgsql | PostgreSQL 10 or later. Tested against 16; there is no multi-version test matrix. |
 | `sqlite` | Microsoft.Data.Sqlite | — |
 
-PostgreSQL's introspection reads `attidentity`, which is why 10 is the floor. Oracle's reads `IDENTITY_COLUMN`, which is why 12c is. The connection string needs no read-only parameter: what a session is put into is the server's business.
+PostgreSQL's introspection reads `attidentity`, which is why 10 is the floor. Oracle's reads `IDENTITY_COLUMN`, which is why 12c is. SQL Server's reads `sys.objects` and `sys.extended_properties`, which is why 2016 is — `DROP TABLE IF EXISTS` and `CREATE OR ALTER` are what came in with it. The connection string needs no read-only parameter: what a session is put into is the server's business.
 
 ### What differs between the engines
 
 Every tool works on every engine. What differs is the engine's own physics, and it is recorded here rather than smoothed over, because a caller that assumes otherwise gets a wrong answer that looks like a right one:
 
-| Behaviour | MySQL | PostgreSQL | SQLite | Oracle |
-|---|---|---|---|---|
-| `''` is distinct from NULL | yes | yes | yes | **no — `''` is NULL** |
-| `ON UPDATE` referential action | yes | yes | yes | **no — a syntax error** |
-| Read-only enforcement | session | session | file | **transaction** |
-| Read-only mode stops DDL | yes | yes | yes | **no — DDL implicitly commits** |
-| The account's privileges are | advised | advised | not applicable | **the only boundary** |
-| `EXPLAIN` returns a plan | yes | yes | yes | **no — engine reports a syntax error** |
-| `SHOW` | yes | no — the engine reports a syntax error | no | **no — the engine reports a syntax error** |
-| Error messages name the object | yes | yes | yes | **no** |
-| `SELECT` with no `FROM` | yes | yes | yes | **no on 21c — a syntax error** |
+| Behaviour | MySQL | PostgreSQL | SQLite | Oracle | SQL Server |
+|---|---|---|---|---|---|
+| `''` is distinct from NULL | yes | yes | yes | **no — `''` is NULL** | yes |
+| `ON UPDATE` referential action | yes | yes | yes | **no — a syntax error** | yes |
+| Engine-level read-only | session | session | file | transaction | **none — there is nothing to set** |
+| Read-only mode stops DDL | yes | yes | yes | **no — DDL implicitly commits** | not applicable |
+| The account's privileges are | advised | advised | not applicable | **the only boundary** | **the only boundary** |
+| `EXPLAIN` returns a plan | yes | yes | yes | **no — engine reports a syntax error** | **no — engine reports a syntax error** |
+| `SHOW` | yes | no — the engine reports a syntax error | no | **no — the engine reports a syntax error** | **no — the engine reports a syntax error** |
+| Error messages name the object | yes | yes | yes | **no** | yes |
+| `SELECT` with no `FROM` | yes | yes | yes | **no on 21c — a syntax error** | yes |
+| A view's columns propagate the base table | `NOT NULL`, and defaults too (MySQL); `NOT NULL` only (SQL Server); neither (the rest) |
+| Metadata is filtered by permission | no | no | not applicable | no | **yes — `VIEW DEFINITION` widens it** |
 
-Two of these matter most. On Oracle, `''` is NULL, so a comparison against an empty string matches nothing and a column written with one reads back as null; and Oracle's read-only mode is a property of a transaction, so a DDL statement commits and thereby escapes it — so on Oracle the account's privileges are the only thing standing between a bypassed Guard and a write (see [ADR 0014](docs/adr/0014-oracle-read-only-transactional-with-ddl-hole.md)).
+Three of these matter most.
+
+On Oracle and SQL Server, the account's privileges are the only thing standing between a bypassed Guard and a write. Oracle because its read-only mode is a property of a transaction, which a DDL statement commits and thereby escapes (see [ADR 0014](docs/adr/0014-oracle-read-only-transactional-with-ddl-hole.md)); SQL Server because it has no read-only mode at all (see [ADR 0016](docs/adr/0016-sqlserver-has-no-engine-level-read-only.md)).
+
+On SQL Server, metadata is filtered by permission, so an account that can read a table but lacks `VIEW DEFINITION` sees less than the server holds — measured, a column's default text reads back as null without it. Nothing is broken when that happens; `list_tables` and `describe_table` simply report fewer details, and it is worth knowing rather than wondering.
 
 Oracle also folds an unquoted identifier to upper case, so a query that does not alias its columns answers with upper-case labels (`SELECT id …` gives a column named `ID`). Alias the columns — `SELECT id AS "id" …` — when the label matters.
 
 ### What a description reports about a view
 
-`describe_table` answers with the columns the catalogue holds, and what a view's columns report differs by engine: MySQL propagates the base table's `NOT NULL` and defaults into the view's columns, while PostgreSQL and SQLite report neither. Read a view's `isNullable` and `defaultValue` as "what the catalogue says" rather than as "what the column behind it is".
+`describe_table` answers with the columns the catalogue holds, and what a view's columns report differs by engine. Measured: MySQL propagates the base table's `NOT NULL` *and* its defaults into the view's columns; SQL Server propagates `NOT NULL` but not the defaults; PostgreSQL and SQLite report neither. Read a view's `isNullable` and `defaultValue` as "what the catalogue says" rather than as "what the column behind it is".
+
+On SQL Server there is a second consequence, and it is the reverse of the question: a view's column inherits its base column's `IDENTITY` flag, so the catalogue calls the `id` column of a view over an identity column generated. Nothing generates a value in a view, so it is reported as not auto-increment.
 
 ## More than one database
 
@@ -179,7 +210,7 @@ Every value comes from the `env` block. There is no configuration file to look f
 
 | Key | Required | Default | Meaning |
 |---|---|---|---|
-| `SHARPDB__TYPE` | yes | — | `mysql`, `oracle`, `postgresql` or `sqlite`. The comparison ignores case and surrounding spaces. |
+| `SHARPDB__TYPE` | yes | — | `mysql`, `mssql`, `oracle`, `postgresql` or `sqlite`. The comparison ignores case and surrounding spaces. |
 | `SHARPDB__CONNECTIONSTRING` | yes | — | Passed through to the Driver that serves this database type. |
 | `SHARPDB__DEFAULTMAXROWS` | no | `100` | Rows returned when a query does not ask for a number. |
 | `SHARPDB__MAXROWS` | no | `1000` | The ceiling a query cannot raise, only be cut down to. |
@@ -189,9 +220,11 @@ Every value comes from the `env` block. There is no configuration file to look f
 
 Nothing writes to your database, and that is enforced in three places rather than one.
 
-1. **The Guard.** Every statement the agent sends is parsed before it runs. Only `SELECT`, `EXPLAIN` and `SHOW` are allowed; anything else is refused before it reaches the database, and the refusal tells the agent what it may use instead.
-2. **The engine's own read-only mode.** MySQL connections are opened with the session set read-only, PostgreSQL sessions are put in the engine's transaction-read-only mode, SQLite files are opened read-only, and Oracle connections are opened inside a read-only transaction. A statement the Guard somehow let through would still be refused by the database.
+1. **The Guard.** Every statement the agent sends is parsed before it runs. Only `SELECT`, `EXPLAIN` and `SHOW` are allowed; anything else is refused before it reaches the database, and the refusal tells the agent what it may use instead. Functions that read outside the database — a server's files, another server — are refused too, per engine.
+2. **The engine's own read-only mode.** Where the engine has one, it is switched on before the connection is handed to anything: MySQL sessions are set read-only, PostgreSQL sessions are put in the engine's transaction-read-only mode, SQLite files are opened read-only, and Oracle connections are opened inside a read-only transaction. A statement the Guard somehow let through would still be refused by the database.
 3. **The database account.** This is the boundary that actually holds.
+
+The second layer is not universal, and saying so is part of the promise rather than a caveat on it. SQL Server has no read-only mode for the server to set, so what its connection carries is read-only **intent** — a real boundary on an Always On readable secondary, and nothing at all on a standalone instance. It is in the matrix above as `none` rather than quietly omitted, because a caller who assumed otherwise would be assuming a protection that is not there.
 
 ### The account is the real boundary
 
@@ -206,7 +239,9 @@ GRANT SELECT ON app.* TO 'sharpdb_ro'@'%';
 
 `SELECT` is enough for all four tools, including reading views. No `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `DROP`, `ALTER` or `FILE` — so even if something were let through, the database would refuse it.
 
-On Oracle the engine's read-only mode does not stop a DDL statement, so the only thing that keeps one out is what the connection's account is allowed to do — which account that is belongs to whoever configured the server (see [ADR 0014](docs/adr/0014-oracle-read-only-transactional-with-ddl-hole.md)).
+On Oracle and SQL Server, the account's privileges are not advice but the boundary, so which account the server connects as is the whole of the read-only guarantee. That account is yours to choose: SharpDb takes the connection string you write and does not inspect, validate or rewrite it.
+
+On SQL Server, if you want metadata to be reported in full rather than in part, that account needs `VIEW DEFINITION` beside `SELECT` — measured on 2022, without it a column's default text is invisible and reads back as null. Nothing stops working without it; the schema is reported with fewer details than the server holds.
 
 For SQLite there is no account to restrict: the file's own permissions are the boundary, so point SharpDb at a copy or a read-only path if the file matters.
 
@@ -236,8 +271,8 @@ SharpDb opens one connection while starting and **exits immediately** if anythin
 
 | What you see | What it means |
 |---|---|
-| `sharpdb: SHARPDB__TYPE is required (expected "mysql" or "oracle" or "postgresql" or "sqlite").` | The `env` block is missing the type, or spells it with a single underscore. |
-| `sharpdb: SHARPDB__TYPE 'postgres' is unknown (expected "mysql" or "oracle" or "postgresql" or "sqlite").` | A type was given that no database type serves. `postgres` is not an alias; the type is spelled `postgresql`. |
+| `sharpdb: SHARPDB__TYPE is required (expected "mysql" or "mssql" or "oracle" or "postgresql" or "sqlite").` | The `env` block is missing the type, or spells it with a single underscore. |
+| `sharpdb: SHARPDB__TYPE 'postgres' is unknown (expected "mysql" or "mssql" or "oracle" or "postgresql" or "sqlite").` | A type was given that no database type serves. `postgres` is not an alias; the type is spelled `postgresql`. |
 | `sharpdb: SHARPDB__CONNECTIONSTRING is required and must not be blank.` | The connection string is missing or empty. |
 | `sharpdb: Could not connect to the mysql database: …` | The server could not connect — usually credentials, host or database name. |
 | `sharpdb: Invalid configuration: Failed to convert configuration value 'plenty' at 'SHARPDB:MaxRows' to type 'System.Int32'.` | A row limit or the timeout is not a number. |
