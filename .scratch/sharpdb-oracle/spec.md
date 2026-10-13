@@ -1,4 +1,3 @@
-Status: ready-for-agent
 Labels: ready-for-agent
 
 # sharpdb-oracle: Oracle Database Provider
