@@ -46,6 +46,7 @@
     <PackageTags>mcp;database;mysql;postgresql;sqlite;oracle;readonly</PackageTags>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>logo.png</PackageIcon>
     <RepositoryUrl>https://github.com/holwon/Holwon.SharpDb.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
@@ -65,6 +66,13 @@
     <None Include="..\..\LICENSE" Pack="true" PackagePath="/" />
     <None Include="..\..\NOTICE" Pack="true" PackagePath="/" />
     <None Include="..\..\third-party\oracle-manageddataaccess-core-LICENSE.txt" Pack="true" PackagePath="/third-party/" />
+
+    <!--
+      The package icon nuget.org shows on the listing. It lives outside the Host's
+      project directory, so the default globbing does not pick it up: the include
+      is what puts it at the package root, which is where PackageIcon looks for it.
+    -->
+    <None Include="..\logo\logo.png" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <!--
