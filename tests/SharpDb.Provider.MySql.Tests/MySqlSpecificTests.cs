@@ -219,9 +219,9 @@ public sealed class MySqlSpecificTests(MySqlContractDatabase database)
     /// The session the Provider opens is in the server's read-only mode.
     /// </summary>
     /// <remarks>
-    /// The shared suite asserts the guarantee by attempting a write; this asserts the mechanism
-    /// behind it, which is the one thing SQLite cannot show — the mode is a session variable the
-    /// server reports, so the switch the Provider performs after connecting is visible.
+    /// This asserts the mechanism behind the guarantee by reading it back as a session variable,
+    /// which is the one thing SQLite cannot show. The guarantee itself is asserted by attempting
+    /// a write just below, as it is in each engine's own project.
     /// </remarks>
     [SkippableFact]
     public async Task The_session_the_provider_opens_is_read_only_at_the_server()
@@ -233,6 +233,31 @@ public sealed class MySqlSpecificTests(MySqlContractDatabase database)
         command.CommandText = "SELECT @@session.transaction_read_only";
 
         Assert.Equal(1L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+    }
+
+    /// <summary>
+    /// The connection the Provider opens refuses a write, and the refusal is the server's own.
+    /// </summary>
+    /// <remarks>
+    /// This is ADR 0002's engine layer, and it sits in this project rather than in the shared suite
+    /// because the layer is not universal: it is a property of MySQL rather than of the port, and
+    /// SQL Server has no engine layer to assert at all (ADR 0016). Read-only is asserted by trying
+    /// to write rather than by inspecting the connection string — the string is how the mode is
+    /// asked for, while a refused write is the mode actually being in force. The write goes
+    /// straight down the connection, never through a Tool, so the refusal is the server's rather
+    /// than the Guard's.
+    /// </remarks>
+    [SkippableFact]
+    public async Task The_connection_the_provider_opens_refuses_a_write()
+    {
+        database.SkipWhenUnavailable();
+        await SeedAsync();
+
+        await using var connection = await OpenSpareAsync();
+        await using var write = connection.CreateCommand();
+        write.CommandText = "INSERT INTO annotated (title) VALUES ('a write the engine must refuse')";
+
+        await Assert.ThrowsAnyAsync<System.Data.Common.DbException>(() => write.ExecuteNonQueryAsync());
     }
 
     /// <summary>

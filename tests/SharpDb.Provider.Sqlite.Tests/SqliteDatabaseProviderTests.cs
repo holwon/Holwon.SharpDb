@@ -85,4 +85,22 @@ public class SqliteDatabaseProviderTests
 
         Assert.Empty(tables);
     }
+
+    [Fact]
+    public async Task The_connection_the_provider_opens_refuses_a_write()
+    {
+        // ADR 0002's engine layer: the file is opened Mode=ReadOnly, so the engine refuses a write
+        // rather than the Guard. The assertion lives here rather than in the shared suite because
+        // the layer is a property of the engines that have one, not of the port (ADR 0016). It is
+        // asserted by trying to write rather than by reading the connection string: the string is
+        // how the mode is asked for, while a refused write is the mode actually being in force.
+        using var database = await SqliteTestDatabase.CreateAsync(Schema);
+        await using var connection = await _provider.CreateReadOnlyConnectionAsync(
+            database.ConnectionString,
+            CancellationToken.None);
+        await using var write = connection.CreateCommand();
+        write.CommandText = "INSERT INTO users (name) VALUES ('a write the engine must refuse')";
+
+        await Assert.ThrowsAnyAsync<System.Data.Common.DbException>(() => write.ExecuteNonQueryAsync());
+    }
 }

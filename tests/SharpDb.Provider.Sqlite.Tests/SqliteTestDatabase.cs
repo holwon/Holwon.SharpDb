@@ -59,7 +59,7 @@ internal sealed class SqliteTestDatabase : IDisposable
     /// Creates a database, runs the given schema against it through a writable connection, and
     /// closes that connection so the Provider is the only one that ever opens the file.
     /// </summary>
-    /// <param name="schemaSql">The DDL to seed the database with, which may hold several statements.</param>
+    /// /// <param name="schemaSql">The DDL to seed the database with, which may hold several statements.</param>
     /// <returns>The seeded database.</returns>
     internal static async Task<SqliteTestDatabase> CreateAsync(string schemaSql)
     {

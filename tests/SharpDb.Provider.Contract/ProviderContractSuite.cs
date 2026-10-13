@@ -5,8 +5,8 @@ namespace SharpDb.Provider.Contract;
 
 /// <summary>
 /// The Provider contract, asserted against a real database: what a listing reports, what a
-/// description reports, and that the connection a Provider opens is one the engine refuses to
-/// write through (ADR 0002, layer 2).
+/// description reports, and that the connection a Provider opens arrives open and read-only to
+/// whatever degree the engine itself can promise.
 /// </summary>
 /// <remarks>
 /// This suite is abstract and lives in its own assembly; each engine's test project subclasses it
@@ -20,6 +20,16 @@ namespace SharpDb.Provider.Contract;
 /// physical semantics cannot produce it. An assertion kept here that only some engines satisfy
 /// would force every other engine to be written to a lie, so the rule is that the shared suite never
 /// asks a question a Provider cannot answer truthfully.
+/// </para>
+/// <para>
+/// The read-only guarantee itself is three layers (ADR 0002), and the middle one is why this suite
+/// cannot assert the guarantee whole. Each of MySQL, PostgreSQL, SQLite and Oracle has an engine
+/// layer that refuses a write on its own — a session setting, a file mode, a transaction — but that
+/// is a property of those engines rather than of the port, and an engine may have none. SQL Server
+/// is the first such engine: it has no read-only mode to set, so the only thing between a
+/// bypassed Guard and a write there is the account's own privileges (ADR 0016). The assertion that
+/// a write is refused by the engine therefore lives in each engine's own project, where the engine
+/// that can answer it does, and this suite keeps only what every Provider can answer truthfully.
 /// </para>
 /// <para>
 /// Only what the Provider answers is asserted — which objects are in this database, how a table is
@@ -84,28 +94,6 @@ public abstract class ProviderContractSuite(IContractDatabase database)
         await using var connection = await OpenAsync();
 
         Assert.Equal(System.Data.ConnectionState.Open, connection.State);
-    }
-
-    /// <summary>
-    /// The connection is in the engine's read-only mode, so a write through it is refused.
-    /// </summary>
-    /// <remarks>
-    /// Read-only is asserted by trying to write rather than by inspecting the connection string:
-    /// the string is how the mode is asked for, while a refused write is the mode actually being in
-    /// force. The refusal must be the engine's — every Driver reports it by throwing its own
-    /// exception, all of which derive from <see cref="System.Data.Common.DbException"/>, and this
-    /// is the tightest type the engines share.
-    /// </remarks>
-    [SkippableFact]
-    public async Task The_connection_a_provider_opens_refuses_a_write()
-    {
-        Database.SkipWhenUnavailable();
-
-        await using var connection = await OpenAsync();
-        await using var write = connection.CreateCommand();
-        write.CommandText = "INSERT INTO orgs (name) VALUES ('a write the engine must refuse')";
-
-        await Assert.ThrowsAnyAsync<System.Data.Common.DbException>(() => write.ExecuteNonQueryAsync());
     }
 
     /// <summary>

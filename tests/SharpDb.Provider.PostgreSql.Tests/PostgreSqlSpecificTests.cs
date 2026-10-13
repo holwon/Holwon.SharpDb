@@ -420,13 +420,13 @@ public sealed class PostgreSqlSpecificTests
     /// The session the Provider opens carries the read-only setting beyond the transaction that set it.
     /// </summary>
     /// <remarks>
-    /// The shared suite asserts the guarantee by attempting a write. This asserts the mechanism,
-    /// and on this engine the mechanism is the whole trap: the spelling that looks right —
-    /// <c>SET SESSION TRANSACTION READ ONLY</c>, which is what MySQL's Provider sends — is
-    /// accepted by PostgreSQL and applies only to the transaction that issued it, which under the
-    /// Driver's autocommit has already ended. A Provider that sent it would answer this question
-    /// with <c>off</c>, and the write test would fail only for whichever statement happened to be
-    /// first. Reading the setting in a second command is what shows the mode outlived the first.
+    /// This asserts the mechanism behind the guarantee, and on this engine the mechanism is the
+    /// whole trap: the spelling that looks right — <c>SET SESSION TRANSACTION READ ONLY</c>, which is
+    /// what MySQL's Provider sends — is accepted by PostgreSQL and applies only to the transaction
+    /// that issued it, which under the Driver's autocommit has already ended. A Provider that sent
+    /// it would answer this question with <c>off</c>, and the write test would fail only for
+    /// whichever statement happened to be first. Reading the setting in a second command is what
+    /// shows the mode outlived the first.
     /// <para>
     /// Each command is its own transaction under autocommit, so the intervening <c>SELECT 1</c>
     /// is what makes this a statement about the session rather than about one transaction.
