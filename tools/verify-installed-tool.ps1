@@ -9,7 +9,7 @@
 # Full run from a clean tree (this is the whole recipe; nothing here is implicit):
 #   dotnet build SharpDb.slnx -c Release
 #   dotnet pack src/SharpDb/SharpDb.csproj -c Release -o artifacts
-#   dotnet tool install --global Holwon.SharpDb.Mcp --add-source artifacts --version 0.2.0
+#   dotnet tool install --global Holwon.SharpDb.Mcp --add-source artifacts --version 0.2.1
 #   pwsh -File tools/verify-installed-tool.ps1
 #
 # The version above is the one `<Version>` in src/SharpDb/SharpDb.csproj carries: the install has to
