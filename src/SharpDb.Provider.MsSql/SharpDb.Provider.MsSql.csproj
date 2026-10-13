@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The SQL Server Provider. It owns its Driver outright: Microsoft.Data.SqlClient is
+    referenced here and nowhere else, so replacing or adding a database type never
+    reaches Core (ADR 0004). The base package is the whole dependency — the Entra and
+    Azure authentication extensions were split out of it at 7.0, so the base is
+    slimmer than the 5.x line it replaced.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpDb.Abstractions\SharpDb.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>
