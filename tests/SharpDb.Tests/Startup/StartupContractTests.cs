@@ -30,10 +30,44 @@ public class StartupContractTests
 
         var reason = StartupAssertions.AssertFailsFast(result);
         Assert.Contains("'postgres' is unknown", reason);
+        Assert.Contains("\"mssql\"", reason);
         Assert.Contains("\"mysql\"", reason);
         Assert.Contains("\"oracle\"", reason);
         Assert.Contains("\"postgresql\"", reason);
         Assert.Contains("\"sqlite\"", reason);
+    }
+
+    [Fact]
+    public async Task Startup_accepts_the_mssql_type_and_reaches_the_database()
+    {
+        // The type is recognized and the Provider is assembled: what fails is the connection, and
+        // it fails as the SQL Server Driver would. Nothing is listening on this port, so the run
+        // proves the whole path from the configured type to a Driver that speaks TDS, without
+        // needing a server for a startup contract test.
+        var result = await HostProcess.RunAsync(new Dictionary<string, string?>
+        {
+            ["SHARPDB__TYPE"] = "mssql",
+            ["SHARPDB__CONNECTIONSTRING"] = "Server=127.0.0.1,1;Database=none;User Id=none;Password=none;TrustServerCertificate=True;Connect Timeout=2",
+        });
+
+        var reason = StartupAssertions.AssertFailsFast(result);
+        Assert.Contains("Could not connect to the mssql database", reason);
+    }
+
+    [Fact]
+    public async Task Startup_against_an_mssql_database_that_does_not_exist_reports_a_reason_without_credentials()
+    {
+        // The connection string carries a password, and the failure must not: ADR 0010 keeps a
+        // credential out of every message a reader sees, and this is the run that would break it.
+        var result = await HostProcess.RunAsync(new Dictionary<string, string?>
+        {
+            ["SHARPDB__TYPE"] = "mssql",
+            ["SHARPDB__CONNECTIONSTRING"] =
+                "Server=127.0.0.1,1;Database=none;User Id=secret_user;Password=secret_password;TrustServerCertificate=True;Connect Timeout=2",
+        });
+
+        var reason = StartupAssertions.AssertFailsFast(result);
+        Assert.DoesNotContain("secret_password", reason, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

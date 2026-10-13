@@ -87,6 +87,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SharpDb.Core\SharpDb.Core.csproj" />
+    <ProjectReference Include="..\SharpDb.Provider.MsSql\SharpDb.Provider.MsSql.csproj" />
     <ProjectReference Include="..\SharpDb.Provider.MySql\SharpDb.Provider.MySql.csproj" />
     <ProjectReference Include="..\SharpDb.Provider.Oracle\SharpDb.Provider.Oracle.csproj" />
     <ProjectReference Include="..\SharpDb.Provider.PostgreSql\SharpDb.Provider.PostgreSql.csproj" />
