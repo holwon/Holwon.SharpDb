@@ -157,13 +157,13 @@ Every tool works on every engine. What differs is the engine's own physics, and 
 | Error messages name the object | yes | yes | yes | **no** | yes |
 | `SELECT` with no `FROM` | yes | yes | yes | **no on 21c — a syntax error** | yes |
 | A view's columns propagate the base table | `NOT NULL`, and defaults too (MySQL); `NOT NULL` only (SQL Server); neither (the rest) |
-| Metadata is filtered by permission | no | no | not applicable | no | **yes — `VIEW DEFINITION` widens it** |
+| What the catalogue reports is filtered by permission | no | no | not applicable | no | **yes — `VIEW DEFINITION` widens it** |
 
 Three of these matter most.
 
 On Oracle and SQL Server, the account's privileges are the only thing standing between a bypassed Guard and a write. Oracle because its read-only mode is a property of a transaction, which a DDL statement commits and thereby escapes (see [ADR 0014](docs/adr/0014-oracle-read-only-transactional-with-ddl-hole.md)); SQL Server because it has no read-only mode at all (see [ADR 0016](docs/adr/0016-sqlserver-has-no-engine-level-read-only.md)).
 
-On SQL Server, metadata is filtered by permission, so an account that can read a table but lacks `VIEW DEFINITION` sees less than the server holds — measured, a column's default text reads back as null without it. Nothing is broken when that happens; `list_tables` and `describe_table` simply report fewer details, and it is worth knowing rather than wondering.
+On SQL Server, what the catalogue reports is filtered by permission, so an account that can read a table but lacks `VIEW DEFINITION` sees less than the server holds — measured, a column's default text reads back as null without it. Nothing is broken when that happens; `list_tables` and `describe_table` simply report fewer details, and it is worth knowing rather than wondering.
 
 Oracle also folds an unquoted identifier to upper case, so a query that does not alias its columns answers with upper-case labels (`SELECT id …` gives a column named `ID`). Alias the columns — `SELECT id AS "id" …` — when the label matters.
 
@@ -241,7 +241,7 @@ GRANT SELECT ON app.* TO 'sharpdb_ro'@'%';
 
 On Oracle and SQL Server, the account's privileges are not advice but the boundary, so which account the server connects as is the whole of the read-only guarantee. That account is yours to choose: SharpDb takes the connection string you write and does not inspect, validate or rewrite it.
 
-On SQL Server, if you want metadata to be reported in full rather than in part, that account needs `VIEW DEFINITION` beside `SELECT` — measured on 2022, without it a column's default text is invisible and reads back as null. Nothing stops working without it; the schema is reported with fewer details than the server holds.
+On SQL Server, if you want the catalogue read in full rather than in part, that account needs `VIEW DEFINITION` beside `SELECT` — measured on 2022, without it a column's default text is invisible and reads back as null. Nothing stops working without it; the schema is reported with fewer details than the server holds.
 
 For SQLite there is no account to restrict: the file's own permissions are the boundary, so point SharpDb at a copy or a read-only path if the file matters.
 
