@@ -12,7 +12,9 @@ namespace SharpDb.Core.Guard;
 /// <remarks>
 /// This is the layer the client gets its feedback from, so a refusal names what was refused and
 /// what would have been accepted (ADR 0002). It is not the only layer — the engine refuses writes
-/// on its own — but it is the only one that can explain itself.
+/// on its own — but it is the only one that can explain itself. That difference is sharpest on an
+/// engine with no read-only mode of its own, which is why the net over functions matters more
+/// there than anywhere: see <see cref="ReadOnlyPolicy.DeniedFunctions"/>.
 /// <para>
 /// The policy is a <em>permit list</em>: the statement forms it allows are selected deliberately,
 /// and everything else is refused. A refusal is therefore always safe, and a mistake shows up as
@@ -290,6 +292,7 @@ public sealed class ReadOnlyGuard(ReadOnlyPolicy policy)
         SqlDialect.Generic => new GenericDialect(),
         SqlDialect.PostgreSql => new PostgreSqlDialect(),
         SqlDialect.Oracle => new GenericDialect(),
+        SqlDialect.MsSql => new MsSqlDialect(),
         _ => throw new ArgumentOutOfRangeException(
             nameof(dialect),
             dialect,
@@ -303,6 +306,17 @@ public sealed class ReadOnlyGuard(ReadOnlyPolicy policy)
     /// The parser's visitor descends a statement's own children but not a function's arguments, so
     /// a call nested inside another call — <c>CONCAT('x', LOAD_FILE(...))</c> — is walked here by
     /// hand. Stopping at the first hit keeps the cost proportional to how early it is found.
+    /// <para>
+    /// A function may also sit in a <c>FROM</c> clause rather than in an expression, and the two
+    /// are modelled differently: <c>SELECT * FROM OPENQUERY(x, 'SELECT 1')</c> parses to a
+    /// <see cref="TableFactor.Table"/> whose name is the function and whose
+    /// <see cref="TableFactor.Table.Args"/> holds its arguments, <em>not</em> to an
+    /// <see cref="Expression.Function"/>. Measured on SqlParserCS 0.6.5, the visitor's expression
+    /// hook never fires for that shape, so a walker that only overrode
+    /// <see cref="PreVisitExpression"/> would read the statement, see no call, and permit a query
+    /// that reads a file or another server. <see cref="PreVisitTableFactor"/> is the hook that does
+    /// fire, and this is why the walker overrides both.
+    /// </para>
     /// </remarks>
     /// <param name="deniedFunctions">The names the engine's policy refuses.</param>
     private sealed class FunctionWalker(IReadOnlySet<string> deniedFunctions) : Visitor
@@ -311,6 +325,22 @@ public sealed class ReadOnlyGuard(ReadOnlyPolicy policy)
         /// The name of the offending function, once one is found.
         /// </summary>
         public string? DeniedFunction { get; private set; }
+
+        /// <inheritdoc/>
+        public override ControlFlow PreVisitTableFactor(TableFactor tableFactor)
+        {
+            // A plain table is a name too, so the check is the same one an expression call gets:
+            // a denied name is refused whoever spells it. A table that merely bears a denied
+            // function's name cannot exist — the engine would resolve it as the function call it
+            // looks like — and refusing the name either way is the safe direction.
+            if (tableFactor is TableFactor.Table table && IsDenied(table.Name))
+            {
+                DeniedFunction = table.Name.ToString();
+                return ControlFlow.Break;
+            }
+
+            return ControlFlow.Continue;
+        }
 
         /// <inheritdoc/>
         public override ControlFlow PreVisitExpression(Expression expression)

@@ -6,6 +6,10 @@
 
 已知缺口：`GenericDialect` 接受双引号与反引号，但不接受 SQLite 的 `[方括号]` 标识符，用方括号写 SQLite SQL 会被误拒。方括号是 SQL Server 风格、在 SQLite 中罕见，接受此缺口。
 
+> **2026-10 复核（加入 SQL Server 后）**：本缺口**对通用方言仍在**（SQLite / MySQL 照旧读写不出方括号），但**对 SQL Server 已闭合**——它的 Provider 声明 `SqlDialect.MsSql`，Guard 把该值映射到解析器自带的 `MsSqlDialect`，后者实测接受 `[my table]`、`[dbo].[readings]` 与 `TOP n`。所以这条缺口的正确表述是**方言的属性**，不是 Guard 的属性：误拒的是"用别的引擎的引号风格写给本引擎读"，而不是方括号本身。该缺口的断言仍在（`A_square_bracketed_identifier_is_refused_as_an_accepted_gap`），它现在断言的是通用方言这一侧。
+
+覆盖此引擎的理由也已记在 ADR 0016：SQL Server **没有**引擎层只读，因此 Guard 是它唯一能解释自己的一层，而不是"背后还有一层兜底"的一层。
+
 **第二个缺口：`Pragma` 被排除在允许清单之外。** 这是超集允许清单**唯一**有意不为的例外，理由不是保守而是 `IsEqual` 标不出来——实测 `PRAGMA journal_mode('WAL')` 与 `PRAGMA user_version(42)` 都置 `IsEqual = false`，却真的写入（前者换掉日志模式，后者写进文件头）。要安全放行就得手工维护一份「哪些 pragma 名是只读的」清单，并随 SQLite 版本演进。收益为零：探查表结构本就该走 `describe_table` 工具，Provider 自己的内省 SQL 也用表值形式（`pragma_table_info(?)`），后者顺带能绑定参数、免掉字符串拼接。
 
 ## 2026-10 修订：结论修正后仍成立，但两句话被推翻

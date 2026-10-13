@@ -51,9 +51,31 @@ public class ReadOnlyGuardTests
     });
 
     /// <summary>
+    /// The Guard under a policy naming SQL Server's dialect and refusing its rowset functions.
+    /// </summary>
+    /// <remarks>
+    /// Built here rather than taken from the SQL Server Provider, for the same reason as the other
+    /// two: the dialect value and the denied list are data, and this file is where the Guard's use
+    /// of them is pinned. The four names are the functions that reach outside the database — a
+    /// file on the server or another server entirely — and they matter more here than elsewhere,
+    /// because SQL Server has no read-only mode for the engine layer to fall back on (ADR 0016).
+    /// </remarks>
+    private static readonly ReadOnlyGuard MsSqlGuard = new(new ReadOnlyPolicy
+    {
+        Dialect = SqlDialect.MsSql,
+        DeniedFunctions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "OPENROWSET",
+            "OPENQUERY",
+            "OPENDATASOURCE",
+            "OPENXML",
+        },
+    });
+
+    /// <summary>
     /// Every policy in use, so an invariant can be asserted against all of them at once.
     /// </summary>
-    private static readonly IReadOnlyList<ReadOnlyGuard> Policies = [Guard, PostgreSqlGuard, OracleGuard];
+    private static readonly IReadOnlyList<ReadOnlyGuard> Policies = [Guard, PostgreSqlGuard, OracleGuard, MsSqlGuard];
     [Theory]
     [InlineData("SELECT 1")]
     [InlineData("SELECT * FROM users")]
@@ -436,9 +458,14 @@ public class ReadOnlyGuardTests
     [Fact]
     public void A_square_bracketed_identifier_is_refused_as_an_accepted_gap()
     {
-        // The generic dialect does not accept SQLite's [bracketed] identifiers, so SQL written
-        // that way is turned away. Brackets are the SQL Server style and are rare in SQLite, which
-        // is why the gap is accepted rather than worked around (ADR 0005).
+        // The generic dialect does not accept [bracketed] identifiers, so a statement written that
+        // way in an engine read under it is turned away. The gap is accepted rather than worked
+        // around (ADR 0005), and the name of this test says whose gap it is: the bracket is the
+        // SQL Server style and is rare in SQLite, so the statement below is really about what the
+        // generic dialect does with another engine's quoting. The same statement is allowed under
+        // the policy SQL Server declares — see the MsSql assertions at the end of this file —
+        // which is the shape the gap was always described as having: it belongs to the dialect,
+        // not to the Guard.
         var decision = Guard.Inspect("SELECT * FROM [my table]");
 
         Assert.False(decision.IsAllowed);
@@ -580,5 +607,128 @@ public class ReadOnlyGuardTests
     public void Every_write_form_is_refused_under_every_policy(string sql)
     {
         Assert.All(Policies, policy => Assert.False(policy.Inspect(sql).IsAllowed));
+    }
+
+    /// <summary>
+    /// SQL Server's ordinary read-only SQL is understood under the policy it declares.
+    /// </summary>
+    /// <remarks>
+    /// <c>TOP n</c> and <c>[bracketed]</c> identifiers are the two spellings this engine's SQL uses
+    /// that a user would send without thinking, and each is asserted here because each is refused
+    /// under a dialect that does not know them — the bracket one outright. A Guard that turned
+    /// either away would be refusing ordinary read-only SQL, which is the class of mis-refusal
+    /// ADR 0005 weighs and accepts only where there is no better answer.
+    /// </remarks>
+    [Theory]
+    [InlineData("SELECT TOP 5 id FROM readings")]
+    [InlineData("SELECT * FROM [my table]")]
+    [InlineData("SELECT [id] FROM [dbo].[readings] WHERE [role] = @role")]
+    [InlineData("SELECT TOP 10 * FROM sys.tables")]
+    public void A_read_only_query_is_allowed_under_the_policy_sql_server_declares(string sql)
+    {
+        Assert.True(MsSqlGuard.Inspect(sql).IsAllowed);
+    }
+
+    /// <summary>
+    /// The dialect value SQL Server names is the one its statements are read with, in both
+    /// directions.
+    /// </summary>
+    /// <remarks>
+    /// The bracket is the measured difference between the SQL Server dialect and every other
+    /// dialect in use: the generic and PostgreSQL dialects both refuse it. Asserting the refusal
+    /// alongside the permission is what shows the value reaching the parser rather than being
+    /// carried around unused.
+    /// </remarks>
+    [Fact]
+    public void The_bracket_the_sql_server_dialect_accepts_is_refused_by_the_others()
+    {
+        const string bracketed = "SELECT * FROM [my table]";
+
+        Assert.True(MsSqlGuard.Inspect(bracketed).IsAllowed);
+        Assert.False(Guard.Inspect(bracketed).IsAllowed);
+        Assert.False(PostgreSqlGuard.Inspect(bracketed).IsAllowed);
+    }
+
+    /// <summary>
+    /// A rowset function is refused wherever it is written, and the refusal names it.
+    /// </summary>
+    /// <remarks>
+    /// These are the functions that read outside the database — a file on the server's disk or a
+    /// whole other server — and they are written in the <c>FROM</c> clause rather than as an
+    /// ordinary call. The parser models that shape as a table whose name is the function, not as a
+    /// function expression, so a walker that only knew about expressions would read
+    /// <c>SELECT * FROM OPENQUERY(…)</c>, see no call, and permit it. Measured on SqlParserCS 0.6.5,
+    /// that is exactly what happened before the walker was taught about table factors.
+    /// <para>
+    /// The reason must name the function: the client has to be told which of its statements was
+    /// refused and why, or a refusal is a wall rather than an answer.
+    /// </para>
+    /// </remarks>
+    [Theory]
+    [InlineData("SELECT * FROM OPENQUERY(LinkedServer, 'SELECT 1')")]
+    [InlineData("SELECT t.c FROM OPENQUERY(LinkedServer, 'SELECT 1 AS c') AS t")]
+    [InlineData("SELECT * FROM OPENROWSET('SQLNCLI', 'Server=x', 'SELECT 1')")]
+    [InlineData("SELECT * FROM OPENXML(@h, '/root/row')")]
+    [InlineData("SELECT * FROM sys.all_columns AS a CROSS JOIN OPENQUERY(x, 'SELECT 1') AS b")]
+    public void A_rowset_function_is_refused_and_named(string sql)
+    {
+        var decision = MsSqlGuard.Inspect(sql);
+
+        Assert.False(decision.IsAllowed);
+        Assert.Contains("is not allowed", decision.Reason!);
+        Assert.Contains(
+            new[] { "OPENROWSET", "OPENQUERY", "OPENDATASOURCE", "OPENXML" },
+            denied => decision.Reason!.Contains(denied, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// A rowset spelling the parser cannot read at all is still refused, though for the other
+    /// reason.
+    /// </summary>
+    /// <remarks>
+    /// Measured on SqlParserCS 0.6.5, three of the four functions have a spelling the parser has no
+    /// grammar for — the <c>BULK</c> form of <c>OPENROWSET</c>, <c>OPENDATASOURCE(...).db.schema.table</c>,
+    /// and <c>OPENXML(… ) WITH (…)</c>. Refusing unparseable text is already the Guard's rule, and
+    /// it is the safe direction: a statement it cannot read is one it cannot vouch for. Asserted so
+    /// that the difference between "refused by name" and "refused as unreadable" is a recorded
+    /// fact rather than a surprise, and so a future parser version that learns the grammar shows up
+    /// here as a changed reason rather than as silence.
+    /// </remarks>
+    [Theory]
+    [InlineData("SELECT * FROM OPENROWSET(BULK 'C:\\tmp\\x.txt', SINGLE_CLOB) AS t")]
+    [InlineData("SELECT * FROM OPENDATASOURCE('SQLNCLI', 'Data Source=elsewhere').db.dbo.t")]
+    [InlineData("SELECT * FROM OPENXML(@h, '/root/row') WITH (a int)")]
+    public void A_rowset_spelling_the_parser_cannot_read_is_refused_as_unreadable(string sql)
+    {
+        var decision = MsSqlGuard.Inspect(sql);
+
+        Assert.False(decision.IsAllowed);
+        Assert.Contains("could not be parsed", decision.Reason!);
+    }
+
+    /// <summary>
+    /// A stored procedure call is refused as a statement kind, and that is why <c>xp_cmdshell</c>
+    /// needs no denied name.
+    /// </summary>
+    /// <remarks>
+    /// <c>xp_cmdshell</c> and <c>sp_executesql</c> are reached through <c>EXEC</c>, which the
+    /// permit list does not name, so they never arrive as a function call for the denied list to
+    /// catch. Asserted because the reasoning is invisible from the policy: the denied list looking
+    /// short is not the same as a hole. The reason is checked to be about the statement rather than
+    /// about a function, which is what tells the two refusals apart — <c>Execute is not allowed</c>
+    /// is the permit list speaking, and the function phrasing ("the function X is not allowed")
+    /// would mean the denied list had caught it instead.
+    /// </remarks>
+    [Theory]
+    [InlineData("EXEC xp_cmdshell 'dir'")]
+    [InlineData("EXEC sp_executesql N'SELECT 1'")]
+    [InlineData("EXECUTE xp_cmdshell 'dir'")]
+    public void A_procedure_call_is_refused_without_needing_a_denied_name(string sql)
+    {
+        var decision = MsSqlGuard.Inspect(sql);
+
+        Assert.False(decision.IsAllowed);
+        Assert.DoesNotContain("the function", decision.Reason!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Execute", decision.Reason!);
     }
 }

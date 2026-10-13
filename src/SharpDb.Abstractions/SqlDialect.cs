@@ -40,4 +40,16 @@ public enum SqlDialect
     /// other engine in use spells it <c>@name</c>.
     /// </value>
     Oracle,
+
+    /// <summary>
+    /// SQL Server's own dialect.
+    /// </summary>
+    /// <value>
+    /// What the SQL Server Provider declares. Measured, it is the only dialect of the ones this
+    /// project names that accepts <c>[bracketed]</c> identifiers — the generic dialect refuses them
+    /// outright — and it reads <c>TOP n</c> as well. So the one accepted gap this project carried
+    /// for SQLite (<c>SELECT * FROM [my table]</c> being turned away) is closed for the engine
+    /// whose SQL is actually written that way.
+    /// </value>
+    MsSql,
 }
