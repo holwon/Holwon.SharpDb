@@ -445,4 +445,137 @@ public static class ContractSchema
         "INSERT INTO orgs (name) VALUES ('acme')",
         "INSERT INTO users (org_id, email, role) VALUES (1, 'a@x', 'admin')",
     ];
+
+    /// <summary>
+    /// The batches that seed the shared schema in a SQL Server database, in the order they must run.
+    /// </summary>
+    /// <value>
+    /// Batches the test fixture runs through a writable connection before handing the database to
+    /// the Provider.
+    /// </value>
+    /// <remarks>
+    /// A list rather than one script, and for a reason that is this engine's own: in T-SQL
+    /// <c>CREATE VIEW</c> must be the first statement of its batch, so a view cannot share one with
+    /// the drops and the tables that precede it. There is no multi-batch separator to write instead
+    /// — <c>GO</c> is a client directive rather than T-SQL, and sending it to the server is a
+    /// syntax error — so the boundaries are the fixture's, which is what this list is.
+    /// <para>
+    /// Where it had to differ from the other engines' scripts, the reason was measured:
+    /// <list type="bullet">
+    /// <item>
+    /// <description>
+    /// The drops are guarded by <c>DROP … IF EXISTS</c> and each kind is dropped before the kind it
+    /// depends on, because T-SQL refuses to drop a table a foreign key still points at.
+    /// </description>
+    /// </item>
+    /// <item>
+    /// <description>
+    /// <c>readings.ratio</c> is <c>FLOAT</c>, which the Driver hands back as a double, so the same
+    /// JSON comes out as on MySQL, SQLite and PostgreSQL.
+    /// </description>
+    /// </item>
+    /// <item>
+    /// <description>
+    /// No column carries a default and no object carries a comment, exactly as on the other
+    /// engines: the shared schema leaves out what the engines answer differently, and this engine's
+    /// own defaults and comments are asserted in its own project.
+    /// </description>
+    /// </item>
+    /// <item>
+    /// <description>
+    /// The foreign keys declare both rules where the shared schema asks for both. Unlike Oracle,
+    /// this engine has <c>ON UPDATE</c> actions, so the shared key carries its
+    /// <c>ON UPDATE SET NULL</c> and the assertion that names it stays in the shared suite.
+    /// </description>
+    /// </item>
+    /// <item>
+    /// <description>
+    /// Every foreign key has an explicit index that covers it, as on every other engine: this one
+    /// creates no index of its own for a foreign key, so the index listings would differ for a
+    /// reason that has nothing to do with the contract.
+    /// </description>
+    /// </item>
+    /// </list>
+    /// </para>
+    /// </remarks>
+    public static readonly string[] MsSqlDdl =
+    [
+        """
+        DROP VIEW IF EXISTS dbo.active_users;
+        DROP TABLE IF EXISTS dbo.bookings;
+        DROP TABLE IF EXISTS dbo.memberships;
+        DROP TABLE IF EXISTS dbo.composite;
+        DROP TABLE IF EXISTS dbo.users;
+        DROP TABLE IF EXISTS dbo.orgs;
+        DROP TABLE IF EXISTS dbo.readings;
+        """,
+        """
+        CREATE TABLE dbo.orgs (
+            id INT IDENTITY(1,1) NOT NULL,
+            name VARCHAR(50) NOT NULL,
+            CONSTRAINT pk_orgs PRIMARY KEY (id)
+        )
+        """,
+        """
+        CREATE TABLE dbo.users (
+            id INT IDENTITY(1,1) NOT NULL,
+            org_id INT NULL,
+            email VARCHAR(50) NULL,
+            role VARCHAR(50) NOT NULL,
+            CONSTRAINT pk_users PRIMARY KEY (id),
+            CONSTRAINT fk_users_org FOREIGN KEY (org_id) REFERENCES dbo.orgs(id)
+                ON DELETE CASCADE ON UPDATE SET NULL
+        );
+        CREATE INDEX idx_users_org_role ON dbo.users(org_id, role);
+        CREATE UNIQUE INDEX idx_users_email ON dbo.users(email);
+        """,
+        """
+        CREATE TABLE dbo.composite (
+            a VARCHAR(20) NOT NULL,
+            b INT NOT NULL,
+            CONSTRAINT pk_composite PRIMARY KEY (b, a)
+        )
+        """,
+        """
+        CREATE TABLE dbo.bookings (
+            id INT IDENTITY(1,1) NOT NULL,
+            composite_b INT NOT NULL,
+            composite_a VARCHAR(20) NOT NULL,
+            CONSTRAINT pk_bookings PRIMARY KEY (id),
+            CONSTRAINT fk_bookings_parent FOREIGN KEY (composite_b, composite_a)
+                REFERENCES dbo.composite(b, a) ON DELETE CASCADE
+        );
+        CREATE INDEX idx_bookings_parent ON dbo.bookings(composite_b, composite_a);
+        """,
+        """
+        CREATE TABLE dbo.memberships (
+            id INT IDENTITY(1,1) NOT NULL,
+            user_id INT NOT NULL,
+            CONSTRAINT pk_memberships PRIMARY KEY (id),
+            CONSTRAINT fk_memberships_user FOREIGN KEY (user_id) REFERENCES dbo.users(id)
+        );
+        CREATE INDEX idx_memberships_user ON dbo.memberships(user_id);
+        """,
+        """
+        CREATE TABLE dbo.readings (
+            id INT IDENTITY(1,1) NOT NULL,
+            label VARCHAR(50) NULL,
+            ratio FLOAT NULL,
+            payload VARBINARY(10) NULL,
+            note VARCHAR(50) NULL,
+            CONSTRAINT pk_readings PRIMARY KEY (id)
+        );
+        INSERT INTO dbo.readings (label, ratio, payload, note) VALUES
+            ('alpha', 1.5, 0x0102, NULL),
+            ('beta', -0.25, 0x, 'hello'),            ('gamma', 0, NULL, ''),
+            ('delta', 2.5, NULL, 'four'),
+            ('epsilon', 3.5, NULL, 'five'),
+            ('zeta', 4.5, NULL, 'six');
+        """,
+        "CREATE VIEW dbo.active_users AS SELECT id, email FROM dbo.users",
+        """
+        INSERT INTO dbo.orgs (name) VALUES ('acme');
+        INSERT INTO dbo.users (org_id, email, role) VALUES (1, 'a@x', 'admin');
+        """,
+    ];
 }
