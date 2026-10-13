@@ -11,7 +11,7 @@ namespace SharpDb.Provider.MsSql;
 /// </summary>
 /// <remarks>
 /// Introspection reads the <c>sys</c> catalogue views rather than <c>information_schema</c>, for
-/// the same reason the PostgreSQL Provider reads its catalogues: a column's declared type, a
+/// the same reason the PostgreSQL Provider reads its catalogues: a column's declared type, an
 /// <c>IDENTITY</c> flag, a comment, the order of a composite key's columns and the pairing of a
 /// composite foreign key all survive only there. Measured, the standard views lose the pairing
 /// outright and report a type without its length.

@@ -731,4 +731,48 @@ public class ReadOnlyGuardTests
         Assert.DoesNotContain("the function", decision.Reason!, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Execute", decision.Reason!);
     }
+
+    /// <summary>
+    /// A table that merely bears a denied function's name is readable, whichever engine denies it.
+    /// </summary>
+    /// <remarks>
+    /// The rowset functions are written in a <c>FROM</c> clause, and so is every table name — the
+    /// parser models both as the same node, and the walker has to tell them apart by the argument
+    /// list rather than by the name alone. Measured on MySQL 8.0 and SQLite: a table literally named
+    /// <c>sleep</c>, which is one of the shared policy's denied names, is readable by
+    /// <c>SELECT … FROM sleep</c> on both, because both engines resolve that position as a table.
+    /// So refusing the name alone would turn a legitimate read into a mis-refusal on a schema that
+    /// happens to use the word — the class of error ADR 0005 weighs and accepts only where there is
+    /// no better answer, and here there is one.
+    /// </remarks>
+    [Theory]
+    [InlineData("SELECT name FROM sleep")]
+    [InlineData("SELECT name FROM sleep WHERE id = 1")]
+    [InlineData("SELECT count(*) FROM benchmark")]
+    [InlineData("SELECT * FROM get_lock AS locked")]
+    public void A_table_that_bears_a_denied_functions_name_is_readable(string sql)
+    {
+        Assert.True(Guard.Inspect(sql).IsAllowed);
+    }
+
+    /// <summary>
+    /// The rowset functions are still refused in the position they are actually written in.
+    /// </summary>
+    /// <remarks>
+    /// The control for the assertion above, and the reason it is a theory rather than one sample:
+    /// telling a table from a call by the argument list has to leave every real call refused, or the
+    /// narrowing would have opened the hole it was meant to close. These are the same statements the
+    /// <c>FROM</c>-clause assertion covers, restated here as the pair to the readability above.
+    /// </remarks>
+    [Theory]
+    [InlineData("SELECT * FROM OPENQUERY(x, 'SELECT 1')")]
+    [InlineData("SELECT * FROM OPENXML(@h, '/root/row')")]
+    [InlineData("SELECT * FROM OPENROWSET('SQLNCLI', 'Server=x', 'SELECT 1')")]
+    public void A_denied_function_written_in_the_from_clause_is_still_refused(string sql)
+    {
+        var decision = MsSqlGuard.Inspect(sql);
+
+        Assert.False(decision.IsAllowed);
+        Assert.Contains("is not allowed", decision.Reason!);
+    }
 }

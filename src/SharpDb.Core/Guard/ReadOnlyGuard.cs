@@ -329,11 +329,18 @@ public sealed class ReadOnlyGuard(ReadOnlyPolicy policy)
         /// <inheritdoc/>
         public override ControlFlow PreVisitTableFactor(TableFactor tableFactor)
         {
-            // A plain table is a name too, so the check is the same one an expression call gets:
-            // a denied name is refused whoever spells it. A table that merely bears a denied
-            // function's name cannot exist — the engine would resolve it as the function call it
-            // looks like — and refusing the name either way is the safe direction.
-            if (tableFactor is TableFactor.Table table && IsDenied(table.Name))
+            // The function and the table are the same node to the parser, and the difference is the
+            // argument list: a call carries one, a table name does not. Both halves of that were
+            // measured, because getting either wrong is a defect in a different direction.
+            //
+            // Without this override, `SELECT * FROM OPENQUERY(…)` reads as an ordinary SELECT and is
+            // permitted — measured, the expression hook never fires for a FROM-clause function.
+            // Without the argument test, a table that merely bears a denied name would be refused:
+            // measured on MySQL 8.0 and SQLite, a table literally named `sleep` is readable by
+            // `SELECT … FROM sleep`, because both engines resolve the FROM position as a table. So
+            // the name alone is not evidence of a call, and only a name with arguments is treated
+            // as one.
+            if (tableFactor is TableFactor.Table { Args: TableFunctionArgs } table && IsDenied(table.Name))
             {
                 DeniedFunction = table.Name.ToString();
                 return ControlFlow.Break;
