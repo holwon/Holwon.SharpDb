@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The MariaDB Provider. It reuses the MySqlConnector Driver the MySQL Provider
+    already owns: the same package speaks both protocols, so no new dependency
+    is introduced (ADR 0004).
+  -->
+  <ItemGroup>
+    <PackageReference Include="MySqlConnector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpDb.Abstractions\SharpDb.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

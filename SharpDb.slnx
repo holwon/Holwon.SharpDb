@@ -5,6 +5,7 @@
   -->
   <Project Path="src/SharpDb.Abstractions/SharpDb.Abstractions.csproj" />
   <Project Path="src/SharpDb.Core/SharpDb.Core.csproj" />
+  <Project Path="src/SharpDb.Provider.MariaDb/SharpDb.Provider.MariaDb.csproj" />
   <Project Path="src/SharpDb.Provider.MsSql/SharpDb.Provider.MsSql.csproj" />
   <Project Path="src/SharpDb.Provider.MySql/SharpDb.Provider.MySql.csproj" />
   <Project Path="src/SharpDb.Provider.Oracle/SharpDb.Provider.Oracle.csproj" />

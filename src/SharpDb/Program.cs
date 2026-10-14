@@ -7,6 +7,7 @@ using SharpDb.Core.Configuration;
 using SharpDb.Core.Guard;
 using SharpDb.Core.Mcp;
 using SharpDb.Core.Startup;
+using SharpDb.Provider.MariaDb;
 using SharpDb.Provider.MsSql;
 using SharpDb.Provider.MySql;
 using SharpDb.Provider.Oracle;
@@ -56,6 +57,7 @@ internal static class Program
 
             var options = SharpDbConfiguration.Read(builder.Configuration);
             var catalog = new ProviderCatalog(
+                new MariaDbDatabaseProvider(),
                 new MsSqlDatabaseProvider(),
                 new MySqlDatabaseProvider(),
                 new OracleDatabaseProvider(),

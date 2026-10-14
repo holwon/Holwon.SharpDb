@@ -42,8 +42,8 @@
     <ToolCommandName>sharpdb-mcp</ToolCommandName>
     <RollForward>Major</RollForward>
     <Version>0.3.1</Version>
-    <Description>Read-only MCP server that lets an AI agent inspect a relational database and run read-only queries. One install serves MySQL, SQL Server, PostgreSQL, SQLite and Oracle; the database type is chosen at startup from the client's environment block.</Description>
-    <PackageTags>mcp;database;mysql;sqlserver;mssql;sqlserver;postgresql;pgsql;sqlite;oracle</PackageTags>
+    <Description>Read-only MCP server that lets an AI agent inspect a relational database and run read-only queries. One install serves MariaDB, MySQL, SQL Server, PostgreSQL, SQLite and Oracle; the database type is chosen at startup from the client's environment block.</Description>
+    <PackageTags>mcp;database;mariadb;mysql;sqlserver;mssql;sqlserver;postgresql;pgsql;sqlite;oracle</PackageTags>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>logo-g.png</PackageIcon>
@@ -87,6 +87,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SharpDb.Core\SharpDb.Core.csproj" />
+    <ProjectReference Include="..\SharpDb.Provider.MariaDb\SharpDb.Provider.MariaDb.csproj" />
     <ProjectReference Include="..\SharpDb.Provider.MsSql\SharpDb.Provider.MsSql.csproj" />
     <ProjectReference Include="..\SharpDb.Provider.MySql\SharpDb.Provider.MySql.csproj" />
     <ProjectReference Include="..\SharpDb.Provider.Oracle\SharpDb.Provider.Oracle.csproj" />
