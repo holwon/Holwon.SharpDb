@@ -41,7 +41,7 @@
     <PackageId>Holwon.SharpDb.Mcp</PackageId>
     <ToolCommandName>sharpdb-mcp</ToolCommandName>
     <RollForward>Major</RollForward>
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
     <Description>Read-only MCP server that lets an AI agent inspect a relational database and run read-only queries. One install serves MySQL, SQL Server, PostgreSQL, SQLite and Oracle; the database type is chosen at startup from the client's environment block.</Description>
     <PackageTags>mcp;database;mysql;sqlserver;mssql;postgresql;sqlite;oracle;readonly</PackageTags>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
