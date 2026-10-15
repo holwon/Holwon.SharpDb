@@ -1,4 +1,5 @@
 using MySqlConnector;
+using SharpDb.Abstractions.Schema;
 using SharpDb.Core.Mcp;
 using SharpDb.Provider.Contract;
 
@@ -339,6 +340,60 @@ public sealed class MariaDbSpecificTests(MariaDbContractDatabase database)
         Assert.Equal(
             """{"columns":["flag","price","stamp","big","payload"],"rows":[[true,12.34,"2024-01-02T03:04:05.1234560",18446744073709551615,"AQI="]]}""",
             ToolPayload.Text(result));
+    }
+
+    /// <summary>
+    /// MariaDB keeps <c>RESTRICT</c> and <c>NO ACTION</c> apart, and the Provider reports each as
+    /// the model value of its own name rather than folding one into the other.
+    /// </summary>
+    /// <remarks>
+    /// Measured on MariaDB 11.4: an explicit <c>ON UPDATE RESTRICT</c> reads back <c>RESTRICT</c>
+    /// and an explicit <c>ON UPDATE NO ACTION</c> reads back <c>NO ACTION</c>, so the two are
+    /// distinguishable strings in the catalogue. The pair is asserted together, because only one
+    /// direction would pass for a mapping that folds both to the same value — which is exactly the
+    /// shape this pins against. What MariaDB does differ on is the action an <em>omitted</em>
+    /// clause reports (<c>RESTRICT</c>, where MySQL reports <c>NO ACTION</c>), which is why the
+    /// shared schema declares its rules explicitly.
+    /// </remarks>
+    [SkippableFact]
+    public async Task Referential_actions_keep_restrict_and_no_action_apart()
+    {
+        database.SkipWhenUnavailable();
+
+        await using (var writable = new MySqlConnection(database.SpareConnectionString))
+        {
+            await writable.OpenAsync();
+
+            await using var command = writable.CreateCommand();
+            command.CommandText = """
+                DROP TABLE IF EXISTS action_restrict;
+                DROP TABLE IF EXISTS action_no_action;
+                DROP TABLE IF EXISTS action_parent;
+                CREATE TABLE action_parent (id INT PRIMARY KEY);
+                CREATE TABLE action_restrict (
+                    id INT PRIMARY KEY,
+                    pid INT,
+                    CONSTRAINT fk_restrict FOREIGN KEY (pid) REFERENCES action_parent (id) ON UPDATE RESTRICT
+                );
+                CREATE TABLE action_no_action (
+                    id INT PRIMARY KEY,
+                    pid INT,
+                    CONSTRAINT fk_no_action FOREIGN KEY (pid) REFERENCES action_parent (id) ON UPDATE NO ACTION
+                );
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+
+        await using var connection = await OpenSpareAsync();
+
+        var restricted = await database.Provider.DescribeTableAsync(connection, "action_restrict", CancellationToken.None);
+        var noAction = await database.Provider.DescribeTableAsync(connection, "action_no_action", CancellationToken.None);
+
+        Assert.NotNull(restricted);
+        Assert.Equal(ForeignKeyAction.Restrict, Assert.Single(restricted.ForeignKeys).OnUpdate);
+
+        Assert.NotNull(noAction);
+        Assert.Equal(ForeignKeyAction.NoAction, Assert.Single(noAction.ForeignKeys).OnUpdate);
     }
 
     /// <summary>

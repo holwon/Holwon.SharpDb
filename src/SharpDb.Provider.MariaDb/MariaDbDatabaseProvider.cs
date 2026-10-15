@@ -241,8 +241,18 @@ public sealed class MariaDbDatabaseProvider : IDatabaseProvider
     /// <summary>
     /// The object a described name refers to, as the catalog spells it.
     /// </summary>
+    /// <param name="Name">The name the catalog stores.</param>
+    /// <param name="Type">Whether the object is a table or a view.</param>
+    /// <param name="Comment">The object's comment, or <see langword="null"/> when it has none.</param>
     private sealed record DescribeObject(string Name, TableType Type, string? Comment);
 
+    /// <summary>
+    /// Finds the table or view a caller named.
+    /// </summary>
+    /// <param name="connection">An open connection to the database.</param>
+    /// <param name="tableName">The name the caller asked for.</param>
+    /// <param name="cancellationToken">Cancels the lookup.</param>
+    /// <returns>The object, or <see langword="null"/> when the database holds no such table or view.</returns>
     private static async Task<DescribeObject?> FindObjectAsync(
         DbConnection connection,
         string tableName,
@@ -265,6 +275,13 @@ public sealed class MariaDbDatabaseProvider : IDatabaseProvider
         return new DescribeObject(reader.GetString(0), type, Comment(reader, 2, type));
     }
 
+    /// <summary>
+    /// Reads a table's columns, in declaration order.
+    /// </summary>
+    /// <param name="connection">An open connection to the database.</param>
+    /// <param name="tableName">The table's name as the catalog spells it.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>The columns.</returns>
     private static async Task<IReadOnlyList<ColumnInfo>> ReadColumnsAsync(
         DbConnection connection,
         string tableName,
@@ -302,6 +319,13 @@ public sealed class MariaDbDatabaseProvider : IDatabaseProvider
         return columns;
     }
 
+    /// <summary>
+    /// Reads a table's primary key, in key order.
+    /// </summary>
+    /// <param name="connection">An open connection to the database.</param>
+    /// <param name="tableName">The table's name as the catalog spells it.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>The key's column names, ordered by their position in the key.</returns>
     private static async Task<IReadOnlyList<string>> ReadPrimaryKeyAsync(
         DbConnection connection,
         string tableName,
@@ -321,6 +345,13 @@ public sealed class MariaDbDatabaseProvider : IDatabaseProvider
         return columns;
     }
 
+    /// <summary>
+    /// Reads a table's foreign keys.
+    /// </summary>
+    /// <param name="connection">An open connection to the database.</param>
+    /// <param name="tableName">The table's name as the catalog spells it.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>One entry per foreign key.</returns>
     private static async Task<IReadOnlyList<ForeignKeyInfo>> ReadForeignKeysAsync(
         DbConnection connection,
         string tableName,
@@ -355,6 +386,17 @@ public sealed class MariaDbDatabaseProvider : IDatabaseProvider
             .ToArray();
     }
 
+    /// <summary>
+    /// Reads a table's indexes, excluding the one backing the primary key.
+    /// </summary>
+    /// <param name="connection">An open connection to the database.</param>
+    /// <param name="tableName">The table's name as the catalog spells it.</param>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>One entry per index.</returns>
+    /// <remarks>
+    /// A column that is an expression rather than a column name is reported with no name and is
+    /// left out, so an index of nothing but expressions arrives with no columns.
+    /// </remarks>
     private static async Task<IReadOnlyList<IndexInfo>> ReadIndexesAsync(
         DbConnection connection,
         string tableName,
@@ -383,23 +425,53 @@ public sealed class MariaDbDatabaseProvider : IDatabaseProvider
             .ToArray();
     }
 
+    /// <summary>
+    /// Reads whether a column's value is generated on insert.
+    /// </summary>
+    /// <param name="extra">The column's <c>EXTRA</c> text, a space-separated flag list.</param>
+    /// <returns><see langword="true"/> when the column is auto-increment.</returns>
+    /// <remarks>
+    /// <c>EXTRA</c> holds several flags at once — <c>auto_increment</c>, <c>on update
+    /// CURRENT_TIMESTAMP</c>, the generated-column markers — so the flag is looked for as a whole
+    /// token rather than as a substring that a longer flag could also contain.
+    /// </remarks>
     private static bool IsAutoIncrement(string extra) =>
         extra.Split(' ', StringSplitOptions.RemoveEmptyEntries)
             .Contains("auto_increment", StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Reads one of the five referential actions.
+    /// </summary>
+    /// <param name="action">The action's name as the server reports it.</param>
+    /// <returns>The action the Schema model names the same way.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The server reported a name outside the five the SQL standard defines, which would mean this
+    /// mapping needs extending rather than that a caller did something wrong.
+    /// </exception>
+    /// <remarks>
+    /// MariaDB keeps <c>RESTRICT</c> and <c>NO ACTION</c> as distinct strings — measured, an
+    /// explicit <c>ON UPDATE RESTRICT</c> reads back <c>RESTRICT</c> and an explicit <c>ON UPDATE
+    /// NO ACTION</c> reads back <c>NO ACTION</c> — so each is mapped to its own model value and
+    /// neither is folded into the other. What does differ from MySQL is only the action an
+    /// <em>omitted</em> clause reports: MariaDB reports <c>RESTRICT</c> where MySQL reports
+    /// <c>NO ACTION</c>. The shared schema declares its rules explicitly so no engine's default
+    /// reaches this mapping.
+    /// </remarks>
     private static ForeignKeyAction Action(string action) => action.ToUpperInvariant() switch
     {
         "CASCADE" => ForeignKeyAction.Cascade,
         "SET NULL" => ForeignKeyAction.SetNull,
         "SET DEFAULT" => ForeignKeyAction.SetDefault,
-        // MariaDB reports both NO ACTION and RESTRICT as RESTRICT in INFORMATION_SCHEMA.
-        // The two are semantically equivalent in MariaDB (both defer the check until the end
-        // of the statement), so RESTRICT is mapped to NoAction to match the shared contract.
-        "RESTRICT" => ForeignKeyAction.NoAction,
+        "RESTRICT" => ForeignKeyAction.Restrict,
         "NO ACTION" => ForeignKeyAction.NoAction,
         _ => throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown referential action."),
     };
 
+    /// <summary>
+    /// Binds a table or view name to the parameter every describe statement names it by.
+    /// </summary>
+    /// <param name="command">The command to bind to.</param>
+    /// <param name="tableName">The name to bind.</param>
     private static void AddTableParameter(DbCommand command, string tableName)
     {
         var parameter = command.CreateParameter();
@@ -408,6 +480,21 @@ public sealed class MariaDbDatabaseProvider : IDatabaseProvider
         command.Parameters.Add(parameter);
     }
 
+    /// <summary>
+    /// Reads a comment column, treating the database's two ways of saying "no comment" as absent.
+    /// </summary>
+    /// <param name="reader">The reader positioned on a row.</param>
+    /// <param name="ordinal">The comment column's position.</param>
+    /// <param name="type">The kind of object the row describes.</param>
+    /// <returns>The comment, or <see langword="null"/> when the database kept none.</returns>
+    /// <remarks>
+    /// Two quirks of <c>INFORMATION_SCHEMA.TABLES</c> are handled here. A table nobody commented on
+    /// reports an empty string rather than null, which is absent rather than a comment saying
+    /// nothing. And a view reports the literal text <c>VIEW</c> in this column — the server's way
+    /// of filling in a column a view cannot use, since <c>CREATE VIEW</c> has no <c>COMMENT</c>
+    /// clause — which is a statement about the object's kind, not about its purpose, and would be
+    /// read as a comment if it were passed through.
+    /// </remarks>
     private static string? Comment(DbDataReader reader, int ordinal, TableType type)
     {
         if (reader.IsDBNull(ordinal))

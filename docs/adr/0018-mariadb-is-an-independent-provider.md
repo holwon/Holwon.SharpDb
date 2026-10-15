@@ -35,6 +35,21 @@ MariaDB 是 MySQL 的分支。两个引擎的 `INFORMATION_SCHEMA` 高度兼容�
 
 结论：MariaDB Provider 采用 **`SET SESSION TRANSACTION READ ONLY`**，与 MySQL Provider 逐字相同。独立项目的价值因此不落在这一句上，而落在上面第 1、2 条。`MariaDbSpecificTests` 里有一条断言 `CREATE TABLE` 被拒，正是为了在两种写法被换回时立刻发现。
 
+## 第二处实测差异：外键动作的默认值
+
+首版 Provider 把 `RESTRICT` 映射成 `ForeignKeyAction.NoAction`，注释写"MariaDB 把 NO ACTION 和 RESTRICT 都报成 RESTRICT"。**实测再次推翻了这个理由**：MariaDB 11.4 明确区分二者——显式 `ON UPDATE RESTRICT` 报 `RESTRICT`，显式 `ON UPDATE NO ACTION` 报 `NO ACTION`。也就是说该映射**有损**：真正的 `RESTRICT` 会被静默报成 `NoAction`，正是本仓库最忌讳的"看起来对的错答案"。
+
+真正的分歧不在这两个字符串之间，而在**省略从句时的默认值**：共享 schema 的 `bookings` 外键省略了 `ON UPDATE`，而
+
+| 引擎 | 省略 `ON UPDATE` 时报什么 |
+|---|---|
+| MySQL / PostgreSQL / SQLite / SQL Server | `NO ACTION` |
+| MariaDB | `RESTRICT` |
+
+当初用有损映射，是为了让共享断言 `OnUpdate == NoAction` 在 MariaDB 上通过。
+
+**修法**：映射改回诚实的逐名对应（`RESTRICT → Restrict`、`NO ACTION → NoAction`），并让共享 DDL 的该外键**显式声明** `ON UPDATE NO ACTION`——消除对引擎默认值的依赖，沿用本仓库用显式索引消除引擎差异的同一手法。`MariaDbSpecificTests.Referential_actions_keep_restrict_and_no_action_apart` 正反两形状配对断言，是这个不再被折回同一值的守护。
+
 ## 代价
 
 - 多一个项目要维护，但结构完全对称，认知负担低。

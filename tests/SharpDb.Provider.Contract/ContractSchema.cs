@@ -44,6 +44,15 @@ namespace SharpDb.Provider.Contract;
 /// </item>
 /// <item>
 /// <description>
+/// The composite foreign key on <c>bookings</c> declares its <c>ON UPDATE</c> rule explicitly —
+/// <c>NO ACTION</c> — rather than letting it default. Every engine's default is a behaviour of
+/// that engine: MariaDB reports <c>RESTRICT</c> for an omitted clause where MySQL, PostgreSQL,
+/// SQLite and SQL Server report <c>NO ACTION</c>. Declaring the rule makes the shared assertion
+/// read the schema rather than an engine's default.
+/// </description>
+/// </item>
+/// <item>
+/// <description>
 /// <c>readings.ratio</c> is <c>DOUBLE</c> in MySQL, <c>REAL</c> in SQLite and
 /// <c>DOUBLE PRECISION</c> in PostgreSQL: SQLite folds every declared numeric type into its own
 /// storage classes, so all three hand the Provider a double and the same JSON comes out.
@@ -101,7 +110,7 @@ public static class ContractSchema
             composite_b INT NOT NULL,
             composite_a VARCHAR(20) NOT NULL,
             PRIMARY KEY (id),
-            CONSTRAINT fk_bookings_parent FOREIGN KEY (composite_b, composite_a) REFERENCES composite(b, a) ON DELETE CASCADE
+            CONSTRAINT fk_bookings_parent FOREIGN KEY (composite_b, composite_a) REFERENCES composite(b, a) ON DELETE CASCADE ON UPDATE NO ACTION
         );
         CREATE INDEX idx_bookings_parent ON bookings(composite_b, composite_a);
 
@@ -167,7 +176,7 @@ public static class ContractSchema
             id INTEGER PRIMARY KEY NOT NULL,
             composite_b INTEGER NOT NULL,
             composite_a TEXT NOT NULL,
-            FOREIGN KEY (composite_b, composite_a) REFERENCES composite(b, a) ON DELETE CASCADE
+            FOREIGN KEY (composite_b, composite_a) REFERENCES composite(b, a) ON DELETE CASCADE ON UPDATE NO ACTION
         );
         CREATE INDEX idx_bookings_parent ON bookings(composite_b, composite_a);
 
@@ -290,7 +299,7 @@ public static class ContractSchema
             composite_a VARCHAR(20) NOT NULL,
             PRIMARY KEY (id),
             CONSTRAINT fk_bookings_parent FOREIGN KEY (composite_b, composite_a)
-                REFERENCES composite(b, a) ON DELETE CASCADE
+                REFERENCES composite(b, a) ON DELETE CASCADE ON UPDATE NO ACTION
         );
         CREATE INDEX idx_bookings_parent ON bookings(composite_b, composite_a);
 
@@ -543,7 +552,7 @@ public static class ContractSchema
             composite_a VARCHAR(20) NOT NULL,
             CONSTRAINT pk_bookings PRIMARY KEY (id),
             CONSTRAINT fk_bookings_parent FOREIGN KEY (composite_b, composite_a)
-                REFERENCES dbo.composite(b, a) ON DELETE CASCADE
+                REFERENCES dbo.composite(b, a) ON DELETE CASCADE ON UPDATE NO ACTION
         );
         CREATE INDEX idx_bookings_parent ON dbo.bookings(composite_b, composite_a);
         """,
