@@ -262,6 +262,29 @@ public sealed class MariaDbSpecificTests(MariaDbContractDatabase database)
     }
 
     /// <summary>
+    /// The connection the Provider opens refuses DDL as well as DML, so the read-only mode closes
+    /// the hole a one-shot transaction flag would leave.
+    /// </summary>
+    /// <remarks>
+    /// Measured on MariaDB 11.4: <c>SET TRANSACTION READ ONLY</c> (no <c>SESSION</c>) refuses an
+    /// INSERT but lets <c>CREATE TABLE</c> through, because DDL implicitly commits the read-only
+    /// transaction and then runs outside it. The Provider issues the session-scoped form precisely
+    /// because it does not have that hole, and this is the assertion that would notice if the two
+    /// were ever swapped back.
+    /// </remarks>
+    [SkippableFact]
+    public async Task The_connection_the_provider_opens_refuses_ddl()
+    {
+        database.SkipWhenUnavailable();
+
+        await using var connection = await OpenSpareAsync();
+        await using var ddl = connection.CreateCommand();
+        ddl.CommandText = "CREATE TABLE a_table_the_engine_must_not_create (id INT)";
+
+        await Assert.ThrowsAnyAsync<System.Data.Common.DbException>(() => ddl.ExecuteNonQueryAsync());
+    }
+
+    /// <summary>
     /// The query Tool runs MariaDB's own SHOW statements.
     /// </summary>
     [SkippableFact]

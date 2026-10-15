@@ -2,16 +2,9 @@
 
 MariaDB 是一个独立的 Provider，而不是 MySQL 的变体。两者共享同一个 Driver（`MySqlConnector`），但各自维护独立的项目、独立的 Introspection SQL、独立的只读机制。
 
-## 实测依据
+## 背景
 
-MariaDB 和 MySQL 的 `INFORMATION_SCHEMA` 在 10.0+ 版本高度兼容，但只读 SQL 语法不同：
-
-| 引擎 | 只读语句 |
-|---|---|
-| MySQL | `SET SESSION TRANSACTION READ ONLY` |
-| MariaDB 10.1+ | `SET TRANSACTION READ ONLY`（去掉 `SESSION` 关键字） |
-
-这个差异看似微小，但它是两个引擎的分水岭：MySQL 要求 `SESSION`，MariaDB 接受但不要求。一个 Provider 如果同时服务两者，就必须在连接后探测引擎版本并选择对应的语句，而那个探测本身就是一次额外的往返。
+MariaDB 是 MySQL 的分支。两个引擎的 `INFORMATION_SCHEMA` 高度兼容，`MySqlConnector` 也同时支持两者，所以"复用 MySQL Provider、只改 Type 字符串"看起来是最省的写法。
 
 ## 决策
 
@@ -19,19 +12,34 @@ MariaDB 和 MySQL 的 `INFORMATION_SCHEMA` 在 10.0+ 版本高度兼容，但只
 
 ## 原因
 
-1. **只读 SQL 不同**：`SET TRANSACTION READ ONLY` vs `SET SESSION TRANSACTION READ ONLY`。独立项目让各自的只读机制清晰可见，不需要条件分支。
+1. **两个引擎的内省目录会各自分化**：MariaDB 已经在往 `INFORMATION_SCHEMA` 里加 MySQL 没有的列，而内省 SQL 的每个字段选择都是针对具体引擎测过的。独立项目让一个引擎的目录变化不会静默改变另一个引擎的断言。
 
-2. **`INFORMATION_SCHEMA` 可能分化**：MariaDB 已经在加 MySQL 没有的列（如 `INFORMATION_SCHEMA.COLUMNS.EXTRA` 在 MariaDB 10.0+ 有但 MySQL 5.7 没有）。独立项目让各自的 Introspection SQL 可以独立演进，不会因为一个引擎的改动影响另一个。
+2. **独立演进**：两个引擎的版本节奏与兼容策略不同。共享代码会把"改一处、影响两个引擎"变成常态，而两者的行为本就允许不同。
 
 3. **成本不高**：一个 `.csproj` + 一个 `.cs` 文件，结构完全对称。认知负担低，维护成本可控。
 
 4. **Driver 共享不违反 ADR 0004**：两个 Provider 都引用 `MySqlConnector`，但各自引用，不互相依赖。Driver 是实现细节，Provider 是对外接口——两个 Provider 共享一个 Driver 不等于两个 Provider 共享一个实现。
 
+## 一次被推翻的预期（实测记录）
+
+设计初稿把"只读语句不同"当作独立的首要理由：以为 MySQL 只接受 `SET SESSION TRANSACTION READ ONLY`、MariaDB 只接受去掉 `SESSION` 的 `SET TRANSACTION READ ONLY`。
+
+**实测推翻了它**（MariaDB 11.4，本仓库容器）：
+
+| 语句 | `@@session.transaction_read_only` | 拒绝 `INSERT` | 拒绝 `CREATE TABLE` |
+|---|---|---|---|
+| `SET TRANSACTION READ ONLY` | `0` | 是（`ERROR 1792`） | **否 —— DDL 成功，只读漏洞** |
+| `SET SESSION TRANSACTION READ ONLY` | `1` | 是（`ERROR 1792`） | 是（`ERROR 1792`） |
+
+两个引擎**都接受两种写法**。差异不在"哪个引擎认哪一句"，而在**语句的作用域**：不带 `SESSION` 的形式是一次性的、只守护当前事务，而 DDL 会隐式提交该事务并在其外执行——这正是 ADR 0014 在 Oracle 上记录的同一个漏洞形状。会话级形式对会话内每个事务都有效，因此同时挡住 DML 与 DDL。
+
+结论：MariaDB Provider 采用 **`SET SESSION TRANSACTION READ ONLY`**，与 MySQL Provider 逐字相同。独立项目的价值因此不落在这一句上，而落在上面第 1、2 条。`MariaDbSpecificTests` 里有一条断言 `CREATE TABLE` 被拒，正是为了在两种写法被换回时立刻发现。
+
 ## 代价
 
 - 多一个项目要维护，但结构完全对称，认知负担低。
 - 两个 Provider 的 Introspection SQL 高度重复（7 条查询几乎相同），但重复是显式的，不是隐式的——每个 Provider 的 SQL 都在自己手里，改一个不影响另一个。
-- 如果未来发现 MariaDB 需要禁用额外的函数（如 `IS_FREELOCK`），可以独立拆出 `MariaDbReadOnlyPolicy`，不需要改 MySQL Provider。
+- 两个 Provider 的只读语句当前逐字相同。若将来其中一个引擎的语法或语义分叉，独立项目让各自可以直接改动，不必先做条件分支。
 
 ## 替代方案
 
@@ -55,7 +63,7 @@ MariaDB 和 MySQL 的 `INFORMATION_SCHEMA` 在 10.0+ 版本高度兼容，但只
 
 ## 后果
 
-- MariaDB 通过和 MySQL 完全相同的 35 个契约测试，证明行为一致。
+- MariaDB 通过和 MySQL 完全相同的契约测试，证明行为一致。
 - MariaDB 的 Introspection SQL 可以独立演进，不受 MySQL 影响。
 - 两个 Provider 共享同一个 Driver（`MySqlConnector`），但各自引用，不违反 ADR 0004。
 - 如果未来发现 MariaDB 需要禁用额外的函数，可以独立拆出 `MariaDbReadOnlyPolicy`，不需要改 MySQL Provider。

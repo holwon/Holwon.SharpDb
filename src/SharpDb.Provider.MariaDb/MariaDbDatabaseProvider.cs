@@ -15,8 +15,13 @@ public sealed class MariaDbDatabaseProvider : IDatabaseProvider
     /// Puts the session in read-only mode; every write it would carry is refused by the server.
     /// </summary>
     /// <remarks>
-    /// MariaDB 10.1+ accepts <c>SET SESSION TRANSACTION READ ONLY</c>, the same statement MySQL uses.
-    /// The effect is session-wide: the mode is in force before a single statement runs (ADR 0002, layer 2).
+    /// The session-scoped form, and deliberately not the shorter <c>SET TRANSACTION READ ONLY</c>.
+    /// Measured on MariaDB 11.4, the two are not equivalent: the shorter form refuses an INSERT
+    /// but lets <c>CREATE TABLE</c> through — its one-shot flag guards the current transaction
+    /// only, and DDL implicitly commits it and then runs outside it, which is the same hole ADR
+    /// 0014 records for Oracle. The <c>SESSION</c> form holds for every transaction in the
+    /// session, so it refuses DML and DDL alike. It is also the statement the MySQL Provider
+    /// issues, so the two engines share it rather than differ over it.
     /// </remarks>
     private const string EnterReadOnlySession = "SET SESSION TRANSACTION READ ONLY";
 

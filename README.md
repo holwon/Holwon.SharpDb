@@ -63,7 +63,7 @@ Add a server entry to your MCP client's configuration — in `.vscode/mcp.json` 
 }
 ```
 
-The connection string is an ordinary MySqlConnector one, so an existing one can be pasted in as it stands. Read-only is added by the server, not by the string: write the string you would give any MySQL client, and SharpDb puts the session in the engine's read-only mode before it hands the connection to anything. MariaDB 10.1 or later is required.
+The connection string is an ordinary MySqlConnector one, so an existing one can be pasted in as it stands. Read-only is added by the server, not by the string: write the string you would give any MySQL client, and SharpDb puts the session in the engine's read-only mode before it hands the connection to anything.
 
 **SQLite**
 
@@ -153,7 +153,7 @@ The key names use a **double** underscore. That is the .NET configuration system
 
 | Type | Driver | Notes |
 |---|---|---|
-| `mariadb` | MySqlConnector | MariaDB 10.1 or later. Tested against 11.4; there is no multi-version test matrix. |
+| `mariadb` | MySqlConnector | Tested against 11.4; there is no multi-version test matrix. |
 | `mysql` | MySqlConnector | — |
 | `mssql` | Microsoft.Data.SqlClient | SQL Server 2016 or later. Tested against 2022 (16.0); there is no multi-version test matrix. |
 | `oracle` | Oracle.ManagedDataAccess.Core | Oracle Database 12c or later. Tested against XE 21; there is no multi-version test matrix. |
@@ -242,7 +242,7 @@ Every value comes from the `env` block. There is no configuration file to look f
 Nothing writes to your database, and that is enforced in three places rather than one.
 
 1. **The Guard.** Every statement the agent sends is parsed before it runs. Only `SELECT`, `EXPLAIN` and `SHOW` are allowed; anything else is refused before it reaches the database, and the refusal tells the agent what it may use instead. Functions that read outside the database — a server's files, another server — are refused too, per engine.
-2. **The engine's own read-only mode.** Where the engine has one, it is switched on before the connection is handed to anything: MariaDB and MySQL sessions are set read-only, PostgreSQL sessions are put in the engine's transaction-read-only mode, SQLite files are opened read-only, and Oracle connections are opened inside a read-only transaction. A statement the Guard somehow let through would still be refused by the database.
+2. **The engine's own read-only mode.** Where the engine has one, it is switched on before the connection is handed to anything: MySQL and MariaDB sessions are set read-only, PostgreSQL sessions are put in the engine's transaction-read-only mode, SQLite files are opened read-only, and Oracle connections are opened inside a read-only transaction. A statement the Guard somehow let through would still be refused by the database.
 3. **The database account.** This is the boundary that actually holds.
 
 The second layer is not universal, and saying so is part of the promise rather than a caveat on it. SQL Server has no read-only mode for the server to set, so what its connection carries is read-only **intent** — a real boundary on an Always On readable secondary, and nothing at all on a standalone instance. It is in the matrix above as `none` rather than quietly omitted, because a caller who assumed otherwise would be assuming a protection that is not there.
