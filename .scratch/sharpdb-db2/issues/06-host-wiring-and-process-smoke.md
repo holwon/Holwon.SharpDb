@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 (Provider 要先存在)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Host 项目的 `ProviderCatalog` 构造多注册一个 Db2 Provider
 - [ ] Host 项目的 csproj 加 `ProjectReference` 到新 Provider

@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (方言覆盖率与占位符形态由实测决定)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] `SqlDialect` 新增 db2 值；`ReadOnlyGuard` 的方言映射指向 `GenericDialect`（本仓库锁的 `SqlParserCS 0.6.5` 无 Db2 方言，与 Oracle 同形），XML doc 注明降级原因
 - [ ] 未知方言值仍**响亮失败**，不回落到没人选的方言

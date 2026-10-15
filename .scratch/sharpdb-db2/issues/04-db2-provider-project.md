@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 (内省 SQL 的形状与只读账号的授权集由实测决定), 02 (Policy 要声明一个已存在的方言值)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 新增 Provider 项目，只引用 Abstractions 与驱动 `Net.IBM.Data.Db2`（版本锁在中央包管理文件里）
 - [ ] 实现 `IDatabaseProvider` 全部成员

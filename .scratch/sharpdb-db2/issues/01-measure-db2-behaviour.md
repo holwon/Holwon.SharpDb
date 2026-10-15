@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 容器 recipe 落定：镜像用 `icr.io/db2_community/db2`（旧 `ibmcom/db2` 即将下线），**钉成 `@sha256:` 摘要**（本仓库规矩：浮动 tag 会被静默升级改掉共享断言在断言什么）；记录 `--privileged=true` 的必要性、`LICENSE=accept`、`DB2INST1_PASSWORD`、`DBNAME`、端口 50000、内存需求（Community Edition 上限 16 GB）、就绪判定方式（日志 "Setup has completed"）、仅支持 amd64 架构
 - [ ] 实测第 2 层彻底缺席：`SET TRANSACTION READ ONLY` 报错、`SET SESSION TRANSACTION READ ONLY` 报错、`FOR READ ONLY` 是游标提示（不阻止 DML）、连接串无 `ApplicationIntent` 等价物；给出"Provider 只能原样打开连接"的明确结论

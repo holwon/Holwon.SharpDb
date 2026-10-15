@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 (套件收缩后才跑得绿), 04 (被测 Provider 要先存在)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] 新增测试项目，引用 Provider + 共享契约库 + 测试框架（含 `Xunit.SkippableFact`）
 - [ ] `IContractDatabase` 实现：手动 `docker run icr.io/db2_community/db2`（`--privileged`、`LICENSE=accept`、密码、`DBNAME`），等待就绪日志，Docker 不可用时设 `Available = false` + `SkipReason`
