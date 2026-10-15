@@ -52,4 +52,16 @@ public enum SqlDialect
     /// whose SQL is actually written that way.
     /// </value>
     MsSql,
+
+    /// <summary>
+    /// Db2 LUW's own dialect.
+    /// </summary>
+    /// <value>
+    /// What the Db2 Provider declares. Read with the generic dialect, because the parser this
+    /// project pins has no Db2 dialect of its own, and the generic one parses Db2's ordinary
+    /// read-only SQL (ADR 0015 as applied to Db2). The value is named for the engine all the
+    /// same, because it selects the one engine-specific rewrite there is alongside Oracle: Db2
+    /// spells a placeholder <c>:name</c> where most engines spell it <c>@name</c>.
+    /// </value>
+    Db2,
 }

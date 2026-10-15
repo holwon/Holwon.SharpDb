@@ -5,6 +5,7 @@
   -->
   <Project Path="src/SharpDb.Abstractions/SharpDb.Abstractions.csproj" />
   <Project Path="src/SharpDb.Core/SharpDb.Core.csproj" />
+  <Project Path="src/SharpDb.Provider.Db2/SharpDb.Provider.Db2.csproj" />
   <Project Path="src/SharpDb.Provider.MariaDb/SharpDb.Provider.MariaDb.csproj" />
   <Project Path="src/SharpDb.Provider.MsSql/SharpDb.Provider.MsSql.csproj" />
   <Project Path="src/SharpDb.Provider.MySql/SharpDb.Provider.MySql.csproj" />
@@ -21,6 +22,7 @@
   -->
   <Project Path="tests/SharpDb.Core.Tests/SharpDb.Core.Tests.csproj" />
   <Project Path="tests/SharpDb.Provider.Contract/SharpDb.Provider.Contract.csproj" />
+  <Project Path="tests/SharpDb.Provider.Db2.Tests/SharpDb.Provider.Db2.Tests.csproj" />
   <Project Path="tests/SharpDb.Provider.MariaDb.Tests/SharpDb.Provider.MariaDb.Tests.csproj" />
   <Project Path="tests/SharpDb.Provider.MsSql.Tests/SharpDb.Provider.MsSql.Tests.csproj" />
   <Project Path="tests/SharpDb.Provider.MySql.Tests/SharpDb.Provider.MySql.Tests.csproj" />

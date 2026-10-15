@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The Db2 Provider. It owns its Driver outright: Net.IBM.Data.Db2 is
+    referenced here and nowhere else, so replacing or adding a database type
+    never reaches Core (ADR 0004).
+  -->
+  <ItemGroup>
+    <PackageReference Include="Net.IBM.Data.Db2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpDb.Abstractions\SharpDb.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

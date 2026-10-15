@@ -11,7 +11,7 @@ SharpDb runs as a local subprocess of your MCP client and speaks the Model Conte
 | `execute_query` | The rows a read-only SQL statement returns. |
 | `list_databases` | Which databases the connection can see. Informational only. |
 
-One install serves **MariaDB**, **MySQL**, **PostgreSQL**, **SQLite**, **Oracle** and **SQL Server**. Which one a process serves is decided at startup from its environment, not by installing a different package — so moving between databases never means reinstalling.
+One install serves **Db2**, **MariaDB**, **MySQL**, **PostgreSQL**, **SQLite**, **Oracle** and **SQL Server**. Which one a process serves is decided at startup from its environment, not by installing a different package — so moving between databases never means reinstalling.
 
 ## Install
 
@@ -147,12 +147,35 @@ The connection string is an ordinary SqlClient one, so an existing one can be pa
 
 Unlike the other engines, SQL Server has **no read-only mode for the server to set**, so nothing is added to the string beyond the connection's read-only *intent* (see [Read-only](#read-only)).
 
+**Db2**
+
+```json
+{
+  "servers": {
+    "sharpdb-db2": {
+      "type": "stdio",
+      "command": "sharpdb-mcp",
+      "args": [],
+      "env": {
+        "SHARPDB__TYPE": "db2",
+        "SHARPDB__CONNECTIONSTRING": "Server=localhost:50000;Database=app;UID=sharpdb_ro;Password=CHANGE_ME"
+      }
+    }
+  }
+}
+```
+
+The connection string is an ordinary IBM Data Server one. Write your SQL with `@name` placeholders as you would for any other engine — the server respells them as `?` before Db2 sees them, because the Db2 Driver binds by position.
+
+Db2 has **no read-only mode for the server to set** — not even an intent keyword. The account's privileges are the only boundary between the caller and a write (see [Read-only](#read-only)).
+
 The key names use a **double** underscore. That is the .NET configuration system's hierarchy separator; a single underscore spells a different variable, which the server silently does not read.
 
 ### What each type supports
 
 | Type | Driver | Notes |
 |---|---|---|
+| `db2` | Net.IBM.Data.Db2 | IBM Db2 LUW 11.5 or later. Tested against 11.5.8; there is no multi-version test matrix. |
 | `mariadb` | MySqlConnector | Tested against 11.4; there is no multi-version test matrix. |
 | `mysql` | MySqlConnector | — |
 | `mssql` | Microsoft.Data.SqlClient | SQL Server 2016 or later. Tested against 2022 (16.0); there is no multi-version test matrix. |
@@ -166,27 +189,26 @@ PostgreSQL's introspection reads `attidentity`, which is why 10 is the floor. Or
 
 Every tool works on every engine. What differs is the engine's own physics, and it is recorded here rather than smoothed over, because a caller that assumes otherwise gets a wrong answer that looks like a right one:
 
-| Behaviour | MariaDB | MySQL | PostgreSQL | SQLite | Oracle | SQL Server |
-|---|---|---|---|---|---|---|
-| `''` is distinct from NULL | yes | yes | yes | yes | **no — `''` is NULL** | yes |
-| `ON UPDATE` referential action | yes | yes | yes | yes | **no — a syntax error** | yes |
-| Engine-level read-only | session | session | session | file | transaction | **none — there is nothing to set** |
-| Read-only mode stops DDL | yes | yes | yes | yes | **no — DDL implicitly commits** | not applicable |
-| The account's privileges are | advised | advised | advised | not applicable | **the only boundary** | **the only boundary** |
-| `EXPLAIN` returns a plan | yes | yes | yes | yes | **no — engine reports a syntax error** | **no — engine reports a syntax error** |
-| `SHOW` | yes | yes | no — the engine reports a syntax error | no | **no — the engine reports a syntax error** | **no — the engine reports a syntax error** |
-| Error messages name the object | yes | yes | yes | yes | **no** | yes |
-| `SELECT` with no `FROM` | yes | yes | yes | yes | **no on 21c — a syntax error** | yes |
-| A view's columns propagate the base table | `NOT NULL`, and defaults too (MariaDB, MySQL); `NOT NULL` only (SQL Server); neither (the rest) |
+| Behaviour | Db2 | MariaDB | MySQL | PostgreSQL | SQLite | Oracle | SQL Server |
+|---|---|---|---|---|---|---|---|
+| `''` is distinct from NULL | yes | yes | yes | yes | yes | **no — `''` is NULL** | yes |
+| `ON UPDATE` referential action | **`NO ACTION` only** | yes | yes | yes | yes | **no — a syntax error** | yes |
+| Engine-level read-only | **none — there is nothing to set** | session | session | session | file | transaction | **none — there is nothing to set** |
+| Read-only mode stops DDL | not applicable | yes | yes | yes | yes | **no — DDL implicitly commits** | not applicable |
+| The account's privileges are | **the only boundary** | advised | advised | advised | not applicable | **the only boundary** | **the only boundary** |
+| `EXPLAIN` returns a plan | yes | yes | yes | yes | yes | **no — engine reports a syntax error** | **no — engine reports a syntax error** |
+| `SHOW` | **no — engine reports a syntax error** | yes | yes | no — the engine reports a syntax error | no | **no — engine reports a syntax error** | **no — engine reports a syntax error** |
+| Error messages name the object | yes | yes | yes | yes | yes | **no** | yes |
+| `SELECT` with no `FROM` | **no — a syntax error** | yes | yes | yes | yes | **no on 21c — a syntax error** | yes |
+| An unquoted identifier is folded to | upper case | lower case | lower case | lower case | n/a | upper case | lower case |
+| A view's columns propagate the base table | neither (the rest) | `NOT NULL`, and defaults too (MariaDB, MySQL); `NOT NULL` only (SQL Server); neither (the rest) |
 | What the catalogue reports is filtered by permission | no | no | no | not applicable | no | **yes — `VIEW DEFINITION` widens it** |
 
-Three of these matter most.
-
-On Oracle and SQL Server, the account's privileges are the only thing standing between a bypassed Guard and a write. Oracle because its read-only mode is a property of a transaction, which a DDL statement commits and thereby escapes (see [ADR 0014](docs/adr/0014-oracle-read-only-transactional-with-ddl-hole.md)); SQL Server because it has no read-only mode at all (see [ADR 0016](docs/adr/0016-sqlserver-has-no-engine-level-read-only.md)).
+On Oracle, SQL Server and Db2, the account's privileges are the only thing standing between a bypassed Guard and a write. Oracle because its read-only mode is a property of a transaction, which a DDL statement commits and thereby escapes (see [ADR 0014](docs/adr/0014-oracle-read-only-transactional-with-ddl-hole.md)); SQL Server because it has no read-only mode at all (see [ADR 0016](docs/adr/0016-sqlserver-has-no-engine-level-read-only.md)); Db2 because it has no read-only mode at all (see [ADR 0019](docs/adr/0019-db2-has-no-engine-level-read-only.md)).
 
 On SQL Server, what the catalogue reports is filtered by permission, so an account that can read a table but lacks `VIEW DEFINITION` sees less than the server holds — measured, a column's default text reads back as null without it. Nothing is broken when that happens; `list_tables` and `describe_table` simply report fewer details, and it is worth knowing rather than wondering.
 
-Oracle also folds an unquoted identifier to upper case, so a query that does not alias its columns answers with upper-case labels (`SELECT id …` gives a column named `ID`). Alias the columns — `SELECT id AS "id" …` — when the label matters.
+Oracle and Db2 also fold an unquoted identifier to upper case, so a query that does not alias its columns answers with upper-case labels (`SELECT id …` gives a column named `ID`). Alias the columns — `SELECT id AS "id" …` — when the label matters. The Provider reports names in lower case so a caller can use them unquoted.
 
 ### What a description reports about a view
 
@@ -231,7 +253,7 @@ Every value comes from the `env` block. There is no configuration file to look f
 
 | Key | Required | Default | Meaning |
 |---|---|---|---|
-| `SHARPDB__TYPE` | yes | — | `mariadb`, `mysql`, `mssql`, `oracle`, `postgresql` or `sqlite`. The comparison ignores case and surrounding spaces. |
+| `SHARPDB__TYPE` | yes | — | `db2`, `mariadb`, `mysql`, `mssql`, `oracle`, `postgresql` or `sqlite`. The comparison ignores case and surrounding spaces. |
 | `SHARPDB__CONNECTIONSTRING` | yes | — | Passed through to the Driver that serves this database type. |
 | `SHARPDB__DEFAULTMAXROWS` | no | `100` | Rows returned when a query does not ask for a number. |
 | `SHARPDB__MAXROWS` | no | `1000` | The ceiling a query cannot raise, only be cut down to. |
@@ -292,8 +314,8 @@ SharpDb opens one connection while starting and **exits immediately** if anythin
 
 | What you see | What it means |
 |---|---|
-| `sharpdb: SHARPDB__TYPE is required (expected "mariadb" or "mysql" or "mssql" or "oracle" or "postgresql" or "sqlite").` | The `env` block is missing the type, or spells it with a single underscore. |
-| `sharpdb: SHARPDB__TYPE 'postgres' is unknown (expected "mariadb" or "mysql" or "mssql" or "oracle" or "postgresql" or "sqlite").` | A type was given that no database type serves. `postgres` is not an alias; the type is spelled `postgresql`. |
+| `sharpdb: SHARPDB__TYPE is required (expected "db2" or "mariadb" or "mysql" or "mssql" or "oracle" or "postgresql" or "sqlite").` | The `env` block is missing the type, or spells it with a single underscore. |
+| `sharpdb: SHARPDB__TYPE 'postgres' is unknown (expected "db2" or "mariadb" or "mysql" or "mssql" or "oracle" or "postgresql" or "sqlite").` | A type was given that no database type serves. `postgres` is not an alias; the type is spelled `postgresql`. |
 | `sharpdb: SHARPDB__CONNECTIONSTRING is required and must not be blank.` | The connection string is missing or empty. |
 | `sharpdb: Could not connect to the mysql database: …` | The server could not connect — usually credentials, host or database name. |
 | `sharpdb: Invalid configuration: Failed to convert configuration value 'plenty' at 'SHARPDB:MaxRows' to type 'System.Int32'.` | A row limit or the timeout is not a number. |

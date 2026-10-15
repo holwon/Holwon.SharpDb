@@ -281,10 +281,10 @@ public sealed class ReadOnlyGuard(ReadOnlyPolicy policy)
     /// constructs a <see cref="ReadOnlyPolicy"/> — so it fails loudly instead of falling back to a
     /// dialect nobody chose.
     /// <para>
-    /// Oracle is read with the generic dialect because the parser this project pins has no Oracle
-    /// dialect of its own, and the generic one reads Oracle's ordinary read-only SQL. Measured, it
-    /// parses 38 of 43 sampled Oracle read-only statements — the same class of accepted mis-refusal
-    /// the other engines carry (ADR 0005), not a widening of what is permitted.
+    /// Oracle and Db2 are read with the generic dialect because the parser this project pins has
+    /// no dialect of its own for either engine, and the generic one reads their ordinary read-only
+    /// SQL. Measured on Oracle, it parses 38 of 43 sampled read-only statements — the same class of
+    /// accepted mis-refusal the other engines carry (ADR 0005), not a widening of what is permitted.
     /// </para>
     /// </remarks>
     private static Dialect DialectFor(SqlDialect dialect) => dialect switch
@@ -293,6 +293,7 @@ public sealed class ReadOnlyGuard(ReadOnlyPolicy policy)
         SqlDialect.PostgreSql => new PostgreSqlDialect(),
         SqlDialect.Oracle => new GenericDialect(),
         SqlDialect.MsSql => new MsSqlDialect(),
+        SqlDialect.Db2 => new GenericDialect(),
         _ => throw new ArgumentOutOfRangeException(
             nameof(dialect),
             dialect,

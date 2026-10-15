@@ -103,6 +103,40 @@ public static class ParameterPlaceholders
     }
 
     /// <summary>
+    /// Replaces every <c>@name</c> placeholder with a positional <c>?</c>, dropping the name.
+    /// </summary>
+    /// <param name="sql">The statement to rewrite.</param>
+    /// <returns>The statement with every named placeholder replaced by <c>?</c>.</returns>
+    /// <remarks>
+    /// Some drivers (measured: IBM Data Server for .NET) bind by position and do not accept named
+    /// markers at all. Every <c>@name</c> becomes <c>?</c>, and the caller adds one parameter per
+    /// occurrence in the order they appear.
+    /// </remarks>
+    public static string WithPositional(string sql)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+
+        var found = Spans(sql).ToList();
+        if (found.Count == 0)
+        {
+            return sql;
+        }
+
+        var rewritten = new StringBuilder(sql.Length);
+        var copied = 0;
+        foreach (var placeholder in found)
+        {
+            rewritten.Append(sql, copied, placeholder.Start - copied);
+            rewritten.Append('?');
+            copied = placeholder.Start + placeholder.Length;
+        }
+
+        rewritten.Append(sql, copied, sql.Length - copied);
+
+        return rewritten.ToString();
+    }
+
+    /// <summary>
     /// Reads the placeholders out of a statement's text, with where each one sits.
     /// </summary>
     /// <param name="sql">The statement's text.</param>

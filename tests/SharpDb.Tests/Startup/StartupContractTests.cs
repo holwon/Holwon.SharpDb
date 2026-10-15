@@ -30,6 +30,7 @@ public class StartupContractTests
 
         var reason = StartupAssertions.AssertFailsFast(result);
         Assert.Contains("'postgres' is unknown", reason);
+        Assert.Contains("\"db2\"", reason);
         Assert.Contains("\"mariadb\"", reason);
         Assert.Contains("\"mssql\"", reason);
         Assert.Contains("\"mysql\"", reason);
