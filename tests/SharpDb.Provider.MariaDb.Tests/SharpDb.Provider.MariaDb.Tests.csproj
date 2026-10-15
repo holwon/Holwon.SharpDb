@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Mirrors the SharpDb.Provider.MySql.Tests layer. Integration tests spin up a
+    containerized MariaDB and skip — never fail — when Docker is unavailable.
+  -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Testcontainers.MariaDb" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Xunit.SkippableFact" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SharpDb.Provider.MariaDb\SharpDb.Provider.MariaDb.csproj" />
+    <ProjectReference Include="..\SharpDb.Provider.Contract\SharpDb.Provider.Contract.csproj" />
+  </ItemGroup>
+
+</Project>

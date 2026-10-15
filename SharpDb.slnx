@@ -21,6 +21,7 @@
   -->
   <Project Path="tests/SharpDb.Core.Tests/SharpDb.Core.Tests.csproj" />
   <Project Path="tests/SharpDb.Provider.Contract/SharpDb.Provider.Contract.csproj" />
+  <Project Path="tests/SharpDb.Provider.MariaDb.Tests/SharpDb.Provider.MariaDb.Tests.csproj" />
   <Project Path="tests/SharpDb.Provider.MsSql.Tests/SharpDb.Provider.MsSql.Tests.csproj" />
   <Project Path="tests/SharpDb.Provider.MySql.Tests/SharpDb.Provider.MySql.Tests.csproj" />
   <Project Path="tests/SharpDb.Provider.Oracle.Tests/SharpDb.Provider.Oracle.Tests.csproj" />

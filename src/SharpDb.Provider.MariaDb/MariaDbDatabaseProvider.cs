@@ -15,11 +15,10 @@ public sealed class MariaDbDatabaseProvider : IDatabaseProvider
     /// Puts the session in read-only mode; every write it would carry is refused by the server.
     /// </summary>
     /// <remarks>
-    /// MariaDB 10.1+ accepts <c>SET TRANSACTION READ ONLY</c> without the <c>SESSION</c> keyword
-    /// MySQL requires. The effect is the same: the session is switched to read-only immediately
-    /// after connecting and before the connection is handed out (ADR 0002, layer 2).
+    /// MariaDB 10.1+ accepts <c>SET SESSION TRANSACTION READ ONLY</c>, the same statement MySQL uses.
+    /// The effect is session-wide: the mode is in force before a single statement runs (ADR 0002, layer 2).
     /// </remarks>
-    private const string EnterReadOnlySession = "SET TRANSACTION READ ONLY";
+    private const string EnterReadOnlySession = "SET SESSION TRANSACTION READ ONLY";
 
     /// <summary>
     /// Lists the tables and views in the connection's own database.
@@ -275,13 +274,22 @@ public sealed class MariaDbDatabaseProvider : IDatabaseProvider
         while (await reader.ReadAsync(cancellationToken))
         {
             var comment = reader.IsDBNull(6) ? null : reader.GetString(6);
+            var defaultValue = reader.IsDBNull(4) ? null : reader.GetString(4);
+
+            // MariaDB reports the literal text "NULL" for a nullable column with no explicit
+            // default, whereas MySQL reports SQL NULL. The two mean the same thing — no default —
+            // and the Schema model represents it as C# null.
+            if (string.Equals(defaultValue, "NULL", StringComparison.OrdinalIgnoreCase))
+            {
+                defaultValue = null;
+            }
 
             columns.Add(new ColumnInfo(
                 Name: reader.GetString(0),
                 Ordinal: reader.GetInt32(1),
                 DataType: reader.GetString(2),
                 IsNullable: reader.GetString(3).Equals("YES", StringComparison.OrdinalIgnoreCase),
-                DefaultValue: reader.IsDBNull(4) ? null : reader.GetString(4),
+                DefaultValue: defaultValue,
                 IsAutoIncrement: IsAutoIncrement(reader.GetString(5)),
                 Comment: string.IsNullOrWhiteSpace(comment) ? null : comment));
         }
@@ -379,7 +387,10 @@ public sealed class MariaDbDatabaseProvider : IDatabaseProvider
         "CASCADE" => ForeignKeyAction.Cascade,
         "SET NULL" => ForeignKeyAction.SetNull,
         "SET DEFAULT" => ForeignKeyAction.SetDefault,
-        "RESTRICT" => ForeignKeyAction.Restrict,
+        // MariaDB reports both NO ACTION and RESTRICT as RESTRICT in INFORMATION_SCHEMA.
+        // The two are semantically equivalent in MariaDB (both defer the check until the end
+        // of the statement), so RESTRICT is mapped to NoAction to match the shared contract.
+        "RESTRICT" => ForeignKeyAction.NoAction,
         "NO ACTION" => ForeignKeyAction.NoAction,
         _ => throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown referential action."),
     };

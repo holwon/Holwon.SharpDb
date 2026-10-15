@@ -11,7 +11,7 @@ SharpDb runs as a local subprocess of your MCP client and speaks the Model Conte
 | `execute_query` | The rows a read-only SQL statement returns. |
 | `list_databases` | Which databases the connection can see. Informational only. |
 
-One install serves **MySQL**, **PostgreSQL**, **SQLite**, **Oracle** and **SQL Server**. Which one a process serves is decided at startup from its environment, not by installing a different package — so moving between databases never means reinstalling.
+One install serves **MariaDB**, **MySQL**, **PostgreSQL**, **SQLite**, **Oracle** and **SQL Server**. Which one a process serves is decided at startup from its environment, not by installing a different package — so moving between databases never means reinstalling.
 
 ## Install
 
@@ -44,6 +44,26 @@ Add a server entry to your MCP client's configuration — in `.vscode/mcp.json` 
   }
 }
 ```
+
+**MariaDB**
+
+```json
+{
+  "servers": {
+    "sharpdb-mariadb": {
+      "type": "stdio",
+      "command": "sharpdb-mcp",
+      "args": [],
+      "env": {
+        "SHARPDB__TYPE": "mariadb",
+        "SHARPDB__CONNECTIONSTRING": "Server=localhost;Port=3306;Database=app;User ID=sharpdb_ro;Password=CHANGE_ME"
+      }
+    }
+  }
+}
+```
+
+The connection string is an ordinary MySqlConnector one, so an existing one can be pasted in as it stands. Read-only is added by the server, not by the string: write the string you would give any MySQL client, and SharpDb puts the session in the engine's read-only mode before it hands the connection to anything. MariaDB 10.1 or later is required.
 
 **SQLite**
 
@@ -133,6 +153,7 @@ The key names use a **double** underscore. That is the .NET configuration system
 
 | Type | Driver | Notes |
 |---|---|---|
+| `mariadb` | MySqlConnector | MariaDB 10.1 or later. Tested against 11.4; there is no multi-version test matrix. |
 | `mysql` | MySqlConnector | — |
 | `mssql` | Microsoft.Data.SqlClient | SQL Server 2016 or later. Tested against 2022 (16.0); there is no multi-version test matrix. |
 | `oracle` | Oracle.ManagedDataAccess.Core | Oracle Database 12c or later. Tested against XE 21; there is no multi-version test matrix. |
@@ -145,19 +166,19 @@ PostgreSQL's introspection reads `attidentity`, which is why 10 is the floor. Or
 
 Every tool works on every engine. What differs is the engine's own physics, and it is recorded here rather than smoothed over, because a caller that assumes otherwise gets a wrong answer that looks like a right one:
 
-| Behaviour | MySQL | PostgreSQL | SQLite | Oracle | SQL Server |
-|---|---|---|---|---|---|
-| `''` is distinct from NULL | yes | yes | yes | **no — `''` is NULL** | yes |
-| `ON UPDATE` referential action | yes | yes | yes | **no — a syntax error** | yes |
-| Engine-level read-only | session | session | file | transaction | **none — there is nothing to set** |
-| Read-only mode stops DDL | yes | yes | yes | **no — DDL implicitly commits** | not applicable |
-| The account's privileges are | advised | advised | not applicable | **the only boundary** | **the only boundary** |
-| `EXPLAIN` returns a plan | yes | yes | yes | **no — engine reports a syntax error** | **no — engine reports a syntax error** |
-| `SHOW` | yes | no — the engine reports a syntax error | no | **no — the engine reports a syntax error** | **no — the engine reports a syntax error** |
-| Error messages name the object | yes | yes | yes | **no** | yes |
-| `SELECT` with no `FROM` | yes | yes | yes | **no on 21c — a syntax error** | yes |
-| A view's columns propagate the base table | `NOT NULL`, and defaults too (MySQL); `NOT NULL` only (SQL Server); neither (the rest) |
-| What the catalogue reports is filtered by permission | no | no | not applicable | no | **yes — `VIEW DEFINITION` widens it** |
+| Behaviour | MariaDB | MySQL | PostgreSQL | SQLite | Oracle | SQL Server |
+|---|---|---|---|---|---|---|
+| `''` is distinct from NULL | yes | yes | yes | yes | **no — `''` is NULL** | yes |
+| `ON UPDATE` referential action | yes | yes | yes | yes | **no — a syntax error** | yes |
+| Engine-level read-only | session | session | session | file | transaction | **none — there is nothing to set** |
+| Read-only mode stops DDL | yes | yes | yes | yes | **no — DDL implicitly commits** | not applicable |
+| The account's privileges are | advised | advised | advised | not applicable | **the only boundary** | **the only boundary** |
+| `EXPLAIN` returns a plan | yes | yes | yes | yes | **no — engine reports a syntax error** | **no — engine reports a syntax error** |
+| `SHOW` | yes | yes | no — the engine reports a syntax error | no | **no — the engine reports a syntax error** | **no — the engine reports a syntax error** |
+| Error messages name the object | yes | yes | yes | yes | **no** | yes |
+| `SELECT` with no `FROM` | yes | yes | yes | yes | **no on 21c — a syntax error** | yes |
+| A view's columns propagate the base table | `NOT NULL`, and defaults too (MariaDB, MySQL); `NOT NULL` only (SQL Server); neither (the rest) |
+| What the catalogue reports is filtered by permission | no | no | no | not applicable | no | **yes — `VIEW DEFINITION` widens it** |
 
 Three of these matter most.
 
@@ -210,7 +231,7 @@ Every value comes from the `env` block. There is no configuration file to look f
 
 | Key | Required | Default | Meaning |
 |---|---|---|---|
-| `SHARPDB__TYPE` | yes | — | `mysql`, `mssql`, `oracle`, `postgresql` or `sqlite`. The comparison ignores case and surrounding spaces. |
+| `SHARPDB__TYPE` | yes | — | `mariadb`, `mysql`, `mssql`, `oracle`, `postgresql` or `sqlite`. The comparison ignores case and surrounding spaces. |
 | `SHARPDB__CONNECTIONSTRING` | yes | — | Passed through to the Driver that serves this database type. |
 | `SHARPDB__DEFAULTMAXROWS` | no | `100` | Rows returned when a query does not ask for a number. |
 | `SHARPDB__MAXROWS` | no | `1000` | The ceiling a query cannot raise, only be cut down to. |
@@ -221,7 +242,7 @@ Every value comes from the `env` block. There is no configuration file to look f
 Nothing writes to your database, and that is enforced in three places rather than one.
 
 1. **The Guard.** Every statement the agent sends is parsed before it runs. Only `SELECT`, `EXPLAIN` and `SHOW` are allowed; anything else is refused before it reaches the database, and the refusal tells the agent what it may use instead. Functions that read outside the database — a server's files, another server — are refused too, per engine.
-2. **The engine's own read-only mode.** Where the engine has one, it is switched on before the connection is handed to anything: MySQL sessions are set read-only, PostgreSQL sessions are put in the engine's transaction-read-only mode, SQLite files are opened read-only, and Oracle connections are opened inside a read-only transaction. A statement the Guard somehow let through would still be refused by the database.
+2. **The engine's own read-only mode.** Where the engine has one, it is switched on before the connection is handed to anything: MariaDB and MySQL sessions are set read-only, PostgreSQL sessions are put in the engine's transaction-read-only mode, SQLite files are opened read-only, and Oracle connections are opened inside a read-only transaction. A statement the Guard somehow let through would still be refused by the database.
 3. **The database account.** This is the boundary that actually holds.
 
 The second layer is not universal, and saying so is part of the promise rather than a caveat on it. SQL Server has no read-only mode for the server to set, so what its connection carries is read-only **intent** — a real boundary on an Always On readable secondary, and nothing at all on a standalone instance. It is in the matrix above as `none` rather than quietly omitted, because a caller who assumed otherwise would be assuming a protection that is not there.
@@ -271,8 +292,8 @@ SharpDb opens one connection while starting and **exits immediately** if anythin
 
 | What you see | What it means |
 |---|---|
-| `sharpdb: SHARPDB__TYPE is required (expected "mysql" or "mssql" or "oracle" or "postgresql" or "sqlite").` | The `env` block is missing the type, or spells it with a single underscore. |
-| `sharpdb: SHARPDB__TYPE 'postgres' is unknown (expected "mysql" or "mssql" or "oracle" or "postgresql" or "sqlite").` | A type was given that no database type serves. `postgres` is not an alias; the type is spelled `postgresql`. |
+| `sharpdb: SHARPDB__TYPE is required (expected "mariadb" or "mysql" or "mssql" or "oracle" or "postgresql" or "sqlite").` | The `env` block is missing the type, or spells it with a single underscore. |
+| `sharpdb: SHARPDB__TYPE 'postgres' is unknown (expected "mariadb" or "mysql" or "mssql" or "oracle" or "postgresql" or "sqlite").` | A type was given that no database type serves. `postgres` is not an alias; the type is spelled `postgresql`. |
 | `sharpdb: SHARPDB__CONNECTIONSTRING is required and must not be blank.` | The connection string is missing or empty. |
 | `sharpdb: Could not connect to the mysql database: …` | The server could not connect — usually credentials, host or database name. |
 | `sharpdb: Invalid configuration: Failed to convert configuration value 'plenty' at 'SHARPDB:MaxRows' to type 'System.Int32'.` | A row limit or the timeout is not a number. |
