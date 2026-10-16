@@ -1,5 +1,7 @@
 # SharpDb
 
+[中文文档](README.zh-CN.md)
+
 A read-only MCP server that lets an AI agent see what is in a relational database and query it, with no way to change it.
 
 SharpDb runs as a local subprocess of your MCP client and speaks the Model Context Protocol over stdio. It exposes four tools:
