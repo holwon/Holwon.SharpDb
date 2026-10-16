@@ -7,10 +7,9 @@ namespace SharpDb.Core.Execution;
 /// </summary>
 /// <remarks>
 /// A caller writes <c>@name</c> whichever database answers, and only the engines whose Driver wants
-/// another spelling are given one. Measured, Oracle and Db2 are those engines: <c>SELECT @id FROM
-/// dual</c> is a syntax error on Oracle (<c>ORA-00936</c>), and Db2 likewise binds only
-/// <c>:id</c> — whichever way <c>BindByName</c> is set, because the marker is part of the grammar
-/// rather than of the binding.
+/// another spelling are given one. Measured, Oracle is one: <c>SELECT @id FROM dual</c> is a syntax
+/// error on Oracle (<c>ORA-00936</c>), and only <c>:id</c> binds. Db2 is the other: the Driver
+/// binds by position only, so every <c>@name</c> is replaced with <c>?</c>.
 /// <para>
 /// The rewrite belongs to Core rather than to the Provider because the Provider is not on the
 /// execution path: it never sees the caller's statement, and the command the statement runs on is

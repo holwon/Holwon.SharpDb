@@ -7,8 +7,8 @@ namespace SharpDb.Provider.Db2;
 /// </summary>
 /// <remarks>
 /// The dialect is Db2's own value, and that value is what selects the placeholder rewrite: Db2
-/// spells a placeholder <c>:name</c> where most engines spell it <c>@name</c>, so a caller writes
-/// <c>@name</c> and Core respells it before the statement reaches this Driver.
+/// binds by position (<c>?</c>), so a caller writes <c>@name</c> and Core replaces every
+/// placeholder with <c>?</c> before the statement reaches this Driver.
 /// <para>
 /// The denied list is empty, and that is a measurement rather than an oversight. The list exists
 /// for functions that work inside the engine's own read-only mode but reach outside the query —

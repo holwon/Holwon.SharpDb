@@ -60,8 +60,9 @@ public enum SqlDialect
     /// What the Db2 Provider declares. Read with the generic dialect, because the parser this
     /// project pins has no Db2 dialect of its own, and the generic one parses Db2's ordinary
     /// read-only SQL (ADR 0015 as applied to Db2). The value is named for the engine all the
-    /// same, because it selects the one engine-specific rewrite there is alongside Oracle: Db2
-    /// spells a placeholder <c>:name</c> where most engines spell it <c>@name</c>.
+    /// same, because it selects the one engine-specific rewrite there is: Db2 binds by position
+    /// (<c>?</c>), so Core replaces every <c>@name</c> with <c>?</c> before the statement reaches
+    /// the Driver.
     /// </value>
     Db2,
 }

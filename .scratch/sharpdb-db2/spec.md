@@ -17,7 +17,7 @@ Db2 LUW 与现有六种引擎有一处**结构性**差异，且是本次新增�
 1. 新增一个 **Db2 Provider**，实现 `IDatabaseProvider` 全部成员，驱动用 `Net.IBM.Data.Db2`（IBM 官方当前活跃的 .NET 包，目标 .NET 10 向下兼容 .NET 8+）。
 2. **Layer 2 完全缺席**：Provider 在 `CreateReadOnlyConnectionAsync` 里只做 `new Db2Connection(connectionString)` + `OpenAsync`，不加任何只读修饰。新增 ADR 记录：Db2 LUW 没有 session/事务/连接级只读机制，唯一挡在写前面的是连接所用账号的权限。与 SQL Server 的 ADR 0016 同形但更极端——连 intent 都没有。
 3. **Core 加一个方言值**：`SqlDialect` 新增 `Db2` 值，在 `ReadOnlyGuard.DialectFor()` 里映射到 `GenericDialect`（SqlParserCS 0.6.5 无 Db2 方言，与 Oracle 同形，ADR 0015）。
-4. **占位符翻译复用 Oracle 路径**：Db2 驱动接受 `:name` 语法，因此 `PlaceholderTranslation.ForDialect` 的翻译条件从 `== Oracle` 扩展为 `is Oracle or Db2`，复用已有的 `@name` → `:name` 翻译。
+4. **占位符翻译**：实测发现 Db2 驱动（`Net.IBM.Data.Db2`）只支持 `?` 位置参数绑定——`:name` 和 `@name` 命名参数在绑定阶段都会失败（`SQL0313N`）。因此 Core 新增 `ParameterPlaceholders.WithPositional()` 方法，把 `@name` 替换为 `?`（丢弃名字，只留占位符）。Provider 的内省 SQL 也使用 `?`。这是唯一一个不使用命名参数的引擎。
 5. **内省读 `SYSCAT` 目录视图**：`SYSCAT.TABLES`（表/视图）、`SYSCAT.COLUMNS`（列）、`SYSCAT.TABCONST` + `SYSCAT.KEYCOLUSE`（主键）、`SYSCAT.REFERENCES` + `SYSCAT.KEYCOLUSE`（外键）、`SYSCAT.INDEXES` + `SYSCAT.INDEXCOLUSE`（索引）。与 PostgreSQL 选目录而非 `information_schema` 同理：自增识别、注释、复合外键列配对顺序都只有目录视图拿得到。
 6. **Schema 过滤用 `CURRENT SCHEMA`**：`ListTablesAsync` 只报当前默认 schema 下的表/视图，与 Oracle 的 `owner = USER` 同形。
 7. **标识符大写折叠**：Db2 未加引号的标识符折为大写（与 Oracle 同形）。Provider 用 `NormalizedName` 把全大写名折成小写报给 AI 消费方；含小写的名字（来自引号标识符）原样返回。
@@ -95,7 +95,7 @@ Db2 LUW 与现有六种引擎有一处**结构性**差异，且是本次新增�
 
 - `SHARPDB__TYPE` 的值为 **`db2`**（大小写不敏感匹配，与现有六个同形）。这是**已发布的公开契约**：发布后改名会破坏用户既有的 `mcp.json`。
 - 连接串是**普通 Db2 连接串**，原样粘贴即可。Db2 没有只读 intent 关键字可加——Provider 原样打开连接。
-- 占位符：用户端统一用 `@name`，Core 翻译成 `:name` 后交给 Db2 驱动（复用 Oracle 的翻译路径）。
+- 占位符：用户端统一用 `@name`，Core 翻译成 `?` 后交给 Db2 驱动（实测发现驱动只支持位置参数绑定，不支持 `:name` 命名参数）。
 
 ### Layer 2 只读
 
@@ -107,7 +107,7 @@ Db2 LUW 与现有六种引擎有一处**结构性**差异，且是本次新增�
 ### 方言与占位符
 
 - `SqlDialect.Db2` 映射到 `GenericDialect`（SqlParserCS 0.6.5 无 Db2 方言，与 Oracle 同形，ADR 0015）。
-- 占位符翻译：`@name` → `:name`（Db2 驱动接受 `:name` 语法），复用 Oracle 已有的翻译路径。
+- 占位符翻译：`@name` → `?`（实测发现 Db2 驱动只支持 `?` 位置参数绑定，`:name` 和 `@name` 命名参数在绑定阶段都会失败）。Core 新增 `ParameterPlaceholders.WithPositional()` 方法，Provider 的内省 SQL 也使用 `?`。
 - `GenericDialect` 对 Db2 SQL 的解析覆盖率需实测（Oracle 是 38/43）；预期不会更低，因为 Db2 的 SQL 语法更接近标准 SQL。
 
 ### 内省 SQL
@@ -177,6 +177,6 @@ Db2 的外键列映射比大多数引擎复杂：`SYSCAT.REFERENCES` 给出表�
 
 Db2 的 Layer 2 缺席与 SQL Server 同形，但更极端——连 `ApplicationIntent` 都没有。ADR 0019 应引用 ADR 0016 的模型（`Read-only intent` vs `Read-only enforcement`），并记录 Db2 上连 intent 都不存在的事实。
 
-### 占位符翻译的对称性
+### 占位符翻译的实测偏差
 
-Oracle 与 Db2 共享同一条翻译路径（`@name` → `:name`），这是 `PlaceholderTranslation.ForDialect` 的第一次"多引擎共享翻译"。未来若有第三个引擎也用 `:name`，翻译条件继续扩展即可；若有引擎用不同语法（如 `?` 位置参数），则需新增独立分支。
+Spec 原方案是复用 Oracle 的 `@name` → `:name` 翻译路径。实测发现 Db2 驱动（`Net.IBM.Data.Db2`）只支持 `?` 位置参数绑定——`:name` 和 `@name` 命名参数在绑定阶段都会失败（`SQL0313N`）。因此实现改为新增 `ParameterPlaceholders.WithPositional()` 方法，把 `@name` 替换为 `?`（丢弃名字，只留占位符）。Provider 的内省 SQL 也使用 `?`。这是唯一一个不使用命名参数的引擎。

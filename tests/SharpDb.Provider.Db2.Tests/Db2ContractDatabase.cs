@@ -22,9 +22,10 @@ namespace SharpDb.Provider.Db2.Tests;
 public sealed class Db2ContractDatabase : IContractDatabase, IAsyncLifetime
 {
     /// <summary>
-    /// The Docker image for the Db2 Community Edition.
+    /// The Docker image for the Db2 Community Edition, pinned by digest so a re-tag cannot change
+    /// what is being tested.
     /// </summary>
-    private const string Image = "ibmcom/db2:latest";
+    private const string Image = "ibmcom/db2@sha256:d678ec116f66992366bf8e7f23df24fe16ccc3f70710243d2c88e3c687670e4c";
 
     /// <summary>
     /// The container name, so it can be stopped and removed deterministically.
